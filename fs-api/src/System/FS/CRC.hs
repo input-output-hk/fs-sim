@@ -26,8 +26,6 @@ import           Data.Word
 import           Foreign.Storable (Storable)
 import           GHC.Generics (Generic)
 import           GHC.Stack
-import           NoThunks.Class (NoThunks)
-
 import           System.FS.API
 import           System.FS.API.Types (AbsOffset (..))
 
@@ -36,7 +34,7 @@ import           System.FS.API.Types (AbsOffset (..))
 -------------------------------------------------------------------------------}
 
 newtype CRC = CRC { getCRC :: Word32 }
-  deriving (Eq, Show, Generic, NoThunks, Storable)
+  deriving (Eq, Show, Generic, Storable)
 
 initCRC :: CRC
 initCRC = CRC $ Digest.crc32 ([] :: [Word8])

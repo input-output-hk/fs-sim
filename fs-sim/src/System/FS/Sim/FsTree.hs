@@ -44,7 +44,6 @@ import qualified Data.Text as Text
 import           Data.Tree
 import           GHC.Generics (Generic)
 import           GHC.Stack
-import           NoThunks.Class (NoThunks)
 
 import           System.FS.API.Types
 
@@ -54,7 +53,7 @@ import           System.FS.API.Types
 
 -- | Simple in-memory representation of a file system
 data FsTree a = File !a | Folder !(Folder a)
-  deriving (Show, Eq, Generic, Functor, NoThunks)
+  deriving (Show, Eq, Generic, Functor)
 
 type Folder a = Map Text (FsTree a)
 

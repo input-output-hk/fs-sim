@@ -43,7 +43,6 @@ library
                     , fs-api
                     , io-classes ^>=0.3
                     , mtl
-                    , nothunks    >=0.1.2 && <0.2
                     , QuickCheck
                     , strict-stm
                     , text        >=1.2   && <1.3
