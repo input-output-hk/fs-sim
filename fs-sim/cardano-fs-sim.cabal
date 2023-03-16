@@ -1,6 +1,6 @@
 cabal-version:      3.0
 
-name:               fs-sim
+name:               cardano-fs-sim
 version:            0.1.0.0
 synopsis:           Simulated file systems
 description:        Simulated file systems.
@@ -40,7 +40,7 @@ library
                     , base16-bytestring
                     , bytestring  >=0.10  && <0.12
                     , containers  >=0.5   && <0.7
-                    , fs-api
+                    , cardano-fs-api
                     , io-classes ^>=0.3
                     , mtl
                     , nothunks    >=0.1.2 && <0.2
@@ -73,8 +73,8 @@ test-suite fs-sim-test
                     , bifunctors
                     , bytestring
                     , containers
-                    , fs-api
-                    , fs-sim
+                    , cardano-fs-api
+                    , cardano-fs-sim
                     , generics-sop
                     , pretty-show
                     , QuickCheck
