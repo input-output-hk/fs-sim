@@ -281,6 +281,7 @@ data Errors = Errors
   , listDirectoryE            :: ErrorStream
   , doesDirectoryExistE       :: ErrorStream
   , doesFileExistE            :: ErrorStream
+  , removeDirectoryRecursiveE :: ErrorStream
   , removeFileE               :: ErrorStream
   , renameFileE               :: ErrorStream
   }
@@ -352,6 +353,7 @@ instance Semigroup Errors where
       , listDirectoryE            = combine listDirectoryE
       , doesDirectoryExistE       = combine doesDirectoryExistE
       , doesFileExistE            = combine doesFileExistE
+      , removeDirectoryRecursiveE = combine removeDirectoryRecursiveE
       , removeFileE               = combine removeFileE
       , renameFileE               = combine renameFileE
       }
@@ -381,6 +383,7 @@ simpleErrors es = Errors
     , listDirectoryE            = es
     , doesDirectoryExistE       = es
     , doesFileExistE            = es
+    , removeDirectoryRecursiveE = es
     , removeFileE               = es
     , renameFileE               = es
     }
@@ -432,6 +435,9 @@ genErrors genPartialWrites genSubstituteWithJunk = do
     listDirectoryE <- streamGen 3
       [ FsInsufficientPermissions, FsResourceInappropriateType
       , FsResourceDoesNotExist ]
+    removeDirectoryRecursiveE <- streamGen 3
+      [ FsInsufficientPermissions, FsResourceAlreadyInUse
+      , FsResourceDoesNotExist, FsResourceInappropriateType ]
     removeFileE    <- streamGen 3
       [ FsInsufficientPermissions, FsResourceAlreadyInUse
       , FsResourceDoesNotExist, FsResourceInappropriateType ]
@@ -518,6 +524,9 @@ mkSimErrorHasFS fsVar errorsVar =
         , doesFileExist            = \p ->
             withErr errorsVar p (doesFileExist p) "doesFileExist"
             doesFileExistE (\e es -> es { doesFileExistE = e })
+        , removeDirectoryRecursive = \p ->
+            withErr errorsVar p (removeDirectoryRecursive p) "removeFile"
+            removeDirectoryRecursiveE (\e es -> es { removeDirectoryRecursiveE = e })
         , removeFile               = \p ->
             withErr errorsVar p (removeFile p) "removeFile"
             removeFileE (\e es -> es { removeFileE = e })
