@@ -55,8 +55,6 @@ import           Foreign.C.Error (Errno (..))
 import qualified Foreign.C.Error as C
 import           GHC.Generics (Generic)
 import qualified GHC.IO.Exception as GHC
-import           NoThunks.Class (InspectHeap (..), InspectHeapNamed (..),
-                     NoThunks (..))
 import           System.FilePath
 import           System.IO (SeekMode (..))
 import qualified System.IO.Error as IO
@@ -99,7 +97,6 @@ allowExisting openMode = case openMode of
 
 newtype FsPath = UnsafeFsPath { fsPathToList :: [Strict.Text] }
   deriving (Eq, Ord, Generic)
-  deriving NoThunks via InspectHeap FsPath
 
 fsPathFromList :: [Strict.Text] -> FsPath
 fsPathFromList = UnsafeFsPath . force
@@ -183,7 +180,6 @@ data Handle h = Handle {
     , handlePath :: !FsPath
     }
   deriving (Generic)
-  deriving NoThunks via InspectHeapNamed "Handle" (Handle h)
 
 instance Eq h => Eq (Handle h) where
   (==) = (==) `on` handleRaw

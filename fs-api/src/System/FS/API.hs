@@ -32,7 +32,6 @@ import qualified Data.ByteString.Lazy as BL
 import           Data.Int (Int64)
 import           Data.Set (Set)
 import           Data.Word
-import           NoThunks.Class (NoThunks, OnlyCheckWhnfNamed (..))
 
 import           System.FS.API.Types
 
@@ -143,12 +142,11 @@ data HasFS m h = HasFS {
     -- the new one.
     --
     -- NOTE: only works for files within the same folder.
-  , renameFile                 :: HasCallStack => FsPath -> FsPath -> m ()
+  , renameFile               :: HasCallStack => FsPath -> FsPath -> m ()
 
     -- | Useful for better error reporting
   , mkFsErrorPath            :: FsPath -> FsErrorPath
   }
-  deriving NoThunks via OnlyCheckWhnfNamed "HasFS" (HasFS m h)
 
 withFile :: (HasCallStack, MonadThrow m)
          => HasFS m h -> FsPath -> OpenMode -> (Handle h -> m a) -> m a
@@ -299,11 +297,7 @@ hPut hasFS g = hPutAll hasFS g . BS.toLazyByteString
   SomeHasFS
 -------------------------------------------------------------------------------}
 
--- | It is often inconvenient to have to parameterise over @h@. One often makes
--- it existential, losing the ability to use derive 'Generic' and 'NoThunks'.
--- This data type hides an existential @h@ parameter of a 'HasFS' and provides a
--- 'NoThunks' thunks instance.
+-- | It is often inconvenient to have to parameterise over @h@. This data type
+-- hides an existential @h@ parameter of a 'HasFS'.
 data SomeHasFS m where
   SomeHasFS :: Eq h => HasFS m h -> SomeHasFS m
-
-  deriving NoThunks via OnlyCheckWhnfNamed "SomeHasFS" (SomeHasFS m)

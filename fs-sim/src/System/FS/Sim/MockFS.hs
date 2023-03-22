@@ -72,7 +72,6 @@ import qualified Data.Set as S
 import qualified Data.Text as Text
 import           Data.Word (Word64)
 import           GHC.Generics (Generic)
-import           NoThunks.Class (NoThunks)
 
 import           System.FS.API.Types
 import           Util.CallStack
@@ -89,7 +88,7 @@ data MockFS = MockFS {
     , mockHandles    :: !(Map HandleMock HandleState)
     , mockNextHandle :: !HandleMock
     }
-  deriving (Generic, Show, NoThunks)
+  deriving (Generic, Show)
 
 -- | We store the files as an 'FsTree' of the file contents
 type Files = FsTree ByteString
@@ -99,7 +98,7 @@ type Files = FsTree ByteString
 -- This is only meaningful when interpreted against a 'MockFS'.
 newtype HandleMock = HandleMock Int
   deriving stock   (Show, Eq, Ord, Generic)
-  deriving newtype (Enum, NoThunks)
+  deriving newtype (Enum)
 
 -- | Instantiate 'Handle' with the mock handle
 type Handle' = Handle HandleMock
@@ -108,13 +107,13 @@ type Handle' = Handle HandleMock
 data HandleState =
     HandleOpen !OpenHandleState
   | HandleClosed !ClosedHandleState
-  deriving (Show, Generic, NoThunks)
+  deriving (Show, Generic)
 
 data OpenHandleState = OpenHandle {
       openFilePath :: !FsPath
     , openPtr      :: !FilePtr
     }
-  deriving (Show, Generic, NoThunks)
+  deriving (Show, Generic)
 
 -- | Check whether the file handle is in write/append mode.
 isWriteHandle :: OpenHandleState -> Bool
@@ -136,12 +135,12 @@ data FilePtr =
     --
     -- Offset is always the end of the file in append mode
   | Append
-  deriving (Show, Generic, NoThunks)
+  deriving (Show, Generic)
 
 data ClosedHandleState = ClosedHandle {
       closedFilePath :: FsPath
     }
-  deriving (Show, Generic, NoThunks)
+  deriving (Show, Generic)
 
 -- | Monads in which we can simulate the file system
 type CanSimFS m = (HasCallStack, MonadState MockFS m, MonadError FsError m)
