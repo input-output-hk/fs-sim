@@ -146,6 +146,14 @@ data HasFS m h = HasFS {
 
     -- | Useful for better error reporting
   , mkFsErrorPath            :: FsPath -> FsErrorPath
+
+    -- | Create an absolute 'FilePath' from a relative 'FsPath'.
+    --
+    -- This is an escape hatch for creating absolute paths when @m ~'IO'@.
+    --
+    -- Postcondition: Should throw an error for any @m@ that is not @IO@
+    -- (or for which we do not have @'MonadIO' m@).
+  , unsafeToFilePath         :: FsPath -> m FilePath
   }
 
 withFile :: (HasCallStack, MonadThrow m)
