@@ -3,4 +3,34 @@
 
 # fs-sim
 
-`fs-sim` and `fs-api` are unlikely to work with GHC versions before `ghc-8.10.7`. See the `tested-with` fields in [`fs-api.cabal`](./fs-api/fs-api.cabal) and [`fs-sim.cabal`](./fs-sim/fs-sim.cabal) for the GHC versions that we test with.
+The [`fs-sim`](./fs-sim/README.md) package provides a filesystem simulator that
+facilitates simulation of errors and file corruption. This simulator is
+specially useful for testing purposes, and works well in conjunction with
+[`io-sim`](ps://github.com/input-output-hk/io-sim).
+
+The [`fs-api`](./fs-api/README.md) package provides an abstract interface to
+filesystems. Code that is written using this interface can be run against the
+built-in file system (required to be in `IO`), a simulated file system as
+provided by `fs-sim`, or any other implementation of a file system.
+
+## Note on GHC compatibility
+
+`fs-sim` and `fs-api` are unlikely to work with GHC versions before
+`ghc-8.10.7`. See the `tested-with` fields in
+[`fs-api.cabal`](./fs-api/fs-api.cabal) and
+[`fs-sim.cabal`](./fs-sim/fs-sim.cabal) for the GHC versions that we test with.
+
+## Credits
+
+Previously, the packages in this repository lived in the [`ouroboros-network`
+repository](https://github.com/input-output-hk/ouroboros-network). [This
+commit](https://github.com/input-output-hk/ouroboros-network/commit/0659e7b7ef66b01763cdf15c2f8777a9394c248d)
+marks the migration of the packages from `ouroboros-network` to the current
+repository. Since the commit history was not carried over to this repository, we
+give credit for the packages to the original authors and frequent contributors, which include:
+
+* Thomas Winant (@mrBliss)
+* Edsko de Vries (@edsko)
+* Kostas Dermentzis (@kderme)
+* Alfredo di Napoli (@adinapoli-iohk)
+

@@ -38,7 +38,7 @@ import           System.FS.API.Types
 import           Util.CallStack
 
 {------------------------------------------------------------------------------
- Typeclass which abstracts over the filesystem
+  Record that abstracts over the filesystem
 ------------------------------------------------------------------------------}
 
 data HasFS m h = HasFS {
