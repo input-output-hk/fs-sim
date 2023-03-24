@@ -95,6 +95,7 @@ allowExisting openMode = case openMode of
   Paths
 -------------------------------------------------------------------------------}
 
+-- | A relative path.
 newtype FsPath = UnsafeFsPath { fsPathToList :: [Strict.Text] }
   deriving (Eq, Ord, Generic)
 
