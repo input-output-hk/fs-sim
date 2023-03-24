@@ -534,6 +534,7 @@ mkSimErrorHasFS fsVar errorsVar =
             withErr errorsVar p1 (renameFile p1 p2) "renameFile"
             renameFileE (\e es -> es { renameFileE = e })
         , mkFsErrorPath = fsToFsErrorPathUnmounted
+        , unsafeToFilePath = error "mkSimErrorHasFS:unsafeToFilePath"
         }
 
 -- | Runs a computation provided an 'Errors' and an initial

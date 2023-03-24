@@ -15,3 +15,4 @@ packages:
   fs-sim
 
 tests: True
+benchmarks: True

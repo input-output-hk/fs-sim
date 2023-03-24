@@ -37,6 +37,10 @@ jobs:
         cabal-version: ${{ matrix.cabal }}
         cabal-update: false
 
+    - name: "Configure cabal.project.local"
+      run: |
+        cp .github/workflows/cabal.project.local.haskell cabal.project.local
+
     - name: Cabal update
       run: cabal update
 
