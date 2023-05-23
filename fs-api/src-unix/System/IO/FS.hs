@@ -45,29 +45,33 @@ defaultFileFlags = Posix.OpenFileFlags {
     , Posix.noctty    = False
     , Posix.nonBlock  = False
     , Posix.trunc     = False
+    , Posix.nofollow  = False
+    , Posix.creat     = Nothing
+    , Posix.cloexec   = False
+    , Posix.directory = False
+    , Posix.sync      = False
     }
 
 -- | Opens a file from disk.
 open :: FilePath -> OpenMode -> IO Fd
-open fp openMode = Posix.openFd fp posixOpenMode fileMode fileFlags
+open fp openMode = Posix.openFd fp posixOpenMode fileFlags
   where
-    (posixOpenMode, fileMode, fileFlags) = case openMode of
+    (posixOpenMode, fileFlags) = case openMode of
       ReadMode         -> ( Posix.ReadOnly
-                          , Nothing
                           , defaultFileFlags
                           )
       AppendMode    ex -> ( Posix.WriteOnly
-                          , Just Posix.stdFileMode
                           , defaultFileFlags { Posix.append = True
-                                             , Posix.exclusive = isExcl ex }
+                                             , Posix.exclusive = isExcl ex
+                                             , Posix.creat = Just Posix.stdFileMode }
                           )
       ReadWriteMode ex -> ( Posix.ReadWrite
-                          , Just Posix.stdFileMode
-                          , defaultFileFlags { Posix.exclusive = isExcl ex }
+                          , defaultFileFlags { Posix.exclusive = isExcl ex
+                                             , Posix.creat = Just Posix.stdFileMode }
                           )
       WriteMode     ex -> ( Posix.ReadWrite
-                          , Just Posix.stdFileMode
-                          , defaultFileFlags { Posix.exclusive = isExcl ex }
+                          , defaultFileFlags { Posix.exclusive = isExcl ex
+                                             , Posix.creat = Just Posix.stdFileMode }
                           )
 
     isExcl AllowExisting = False
