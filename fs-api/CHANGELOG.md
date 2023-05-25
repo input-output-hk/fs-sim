@@ -1,5 +1,10 @@
 # Revision history for fs-api
 
+### 0.1.0.3 -- 2023-05025
+
+* Fix for ghc-9.6
+# Require `unix >= 2.8` dependency.
+
 ## 0.1.0.1 -- 2023-04-24
 
 ### Non-breaking

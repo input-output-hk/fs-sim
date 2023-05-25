@@ -15,4 +15,13 @@ packages:
   fs-sim
 
 tests: True
+test-show-details: direct
 benchmarks: True
+
+-- HEAD of git has been fixed buy not yet released to Hackage.
+-- Only used in tests.
+source-repository-package
+  type: git
+  location: https://github.com/stevana/quickcheck-state-machine
+  tag: 7499a90102e78b1b67bc37635618cc8c1321b1f4
+  --sha256: 12bvc984lwlj9vbfnl1ihs4drafnir94d42wbm9mdrqlb7llfnlx

@@ -57,8 +57,9 @@ module System.FS.Sim.MockFS (
   , MockFS
   ) where
 
-import           Control.Monad.Except
-import           Control.Monad.State
+import           Control.Monad (unless, void, when)
+import           Control.Monad.Except (MonadError, throwError)
+import           Control.Monad.State (MonadState, get, gets, put)
 import           Data.Bifunctor
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
