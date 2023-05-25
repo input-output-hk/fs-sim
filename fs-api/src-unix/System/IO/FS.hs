@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP            #-}
 {-# LANGUAGE PackageImports #-}
 
 module System.IO.FS (
@@ -45,15 +46,18 @@ defaultFileFlags = Posix.OpenFileFlags {
     , Posix.noctty    = False
     , Posix.nonBlock  = False
     , Posix.trunc     = False
+# if MIN_VERSION_unix(2,8,0)
     , Posix.nofollow  = False
     , Posix.creat     = Nothing
     , Posix.cloexec   = False
     , Posix.directory = False
     , Posix.sync      = False
+# endif
     }
 
 -- | Opens a file from disk.
 open :: FilePath -> OpenMode -> IO Fd
+# if MIN_VERSION_unix(2,8,0)
 open fp openMode = Posix.openFd fp posixOpenMode fileFlags
   where
     (posixOpenMode, fileFlags) = case openMode of
@@ -76,7 +80,31 @@ open fp openMode = Posix.openFd fp posixOpenMode fileFlags
 
     isExcl AllowExisting = False
     isExcl MustBeNew     = True
+# else
+open fp openMode = Posix.openFd fp posixOpenMode fileMode fileFlags
+  where
+    (posixOpenMode, fileMode, fileFlags) = case openMode of
+      ReadMode         -> ( Posix.ReadOnly
+                          , Nothing
+                          , defaultFileFlags
+                          )
+      AppendMode    ex -> ( Posix.WriteOnly
+                          , Just Posix.stdFileMode
+                          , defaultFileFlags { Posix.append = True
+                                             , Posix.exclusive = isExcl ex }
+                          )
+      ReadWriteMode ex -> ( Posix.ReadWrite
+                          , Just Posix.stdFileMode
+                          , defaultFileFlags { Posix.exclusive = isExcl ex }
+                          )
+      WriteMode     ex -> ( Posix.ReadWrite
+                          , Just Posix.stdFileMode
+                          , defaultFileFlags { Posix.exclusive = isExcl ex }
+                          )
 
+    isExcl AllowExisting = False
+    isExcl MustBeNew     = True
+# endif
 
 -- | Writes the data pointed by the input 'Ptr Word8' into the input 'FHandle'.
 write :: FHandle -> Ptr Word8 -> Int64 -> IO Word32
