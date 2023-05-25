@@ -1,8 +1,8 @@
 # Revision history for fs-sim
 
-### 0.1.0.3 -- 2023-05025
+## 0.1.0.2 -- 2023-05-25
 
-* Fix for ghc-9.6
+* Enable building with ghc-9.6
 
 ## 0.1.0.1 -- 2023-04-24
 
