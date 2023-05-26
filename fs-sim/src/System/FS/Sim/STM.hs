@@ -5,6 +5,7 @@
 module System.FS.Sim.STM (
     runSimFS
   , simHasFS
+  , simHasFS'
   ) where
 
 import           Control.Concurrent.Class.MonadSTM.Strict
@@ -31,8 +32,14 @@ runSimFS :: (MonadSTM m, MonadThrow m)
 runSimFS fs act = do
     var <- newTVarIO fs
     a   <- act (simHasFS var)
-    fs' <- atomically (readTVar var)
+    fs' <- readTVarIO var
     return (a, fs')
+
+-- | Alternative to 'simHasFS' that creates 'TVar's internally.
+simHasFS' :: (MonadSTM m, MonadThrow m)
+         => MockFS
+         -> m (HasFS m HandleMock)
+simHasFS' mockFS = simHasFS <$> newTVarIO mockFS
 
 -- | Equip @m@ with a @HasFs@ instance using the mock file system
 simHasFS :: forall m. (MonadSTM m, MonadThrow m)

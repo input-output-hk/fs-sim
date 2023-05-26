@@ -12,6 +12,7 @@
 module System.FS.Sim.Error (
     -- * Simulate Errors monad
     mkSimErrorHasFS
+  , mkSimErrorHasFS'
   , runSimErrorFS
   , withErrors
     -- * Streams
@@ -475,6 +476,14 @@ instance Arbitrary Errors where
 {-------------------------------------------------------------------------------
   Simulate Errors monad
 -------------------------------------------------------------------------------}
+
+-- | Alternative to 'mkSimErrorHasFS' that creates 'TVar's internally.
+mkSimErrorHasFS' :: (MonadSTM m, MonadThrow m)
+                => MockFS
+                -> Errors
+                -> m (HasFS m HandleMock)
+mkSimErrorHasFS' mockFS errs =
+    mkSimErrorHasFS <$> newTVarIO mockFS <*> newTVarIO errs
 
 -- | Introduce possibility of errors
 --
