@@ -31,6 +31,7 @@ module System.FS.Sim.Error (
     -- * Error streams for 'HasFS'
   , Errors (..)
   , allNull
+  , emptyErrors
   , genErrors
   , simpleErrors
   ) where
@@ -64,7 +65,8 @@ import           System.FS.API.Types
 
 import           System.FS.Sim.MockFS (HandleMock, MockFS)
 import qualified System.FS.Sim.STM as Sim
-import           System.FS.Sim.Stream
+import qualified System.FS.Sim.Stream as Stream
+import           System.FS.Sim.Stream (Stream)
 
 {-------------------------------------------------------------------------------
   Streams of errors
@@ -229,22 +231,22 @@ data Errors = Errors
 
 -- | Return 'True' if all streams are empty ('null').
 allNull :: Errors -> Bool
-allNull Errors {..} = null dumpStateE
-                   && null hOpenE
-                   && null hCloseE
-                   && null hSeekE
-                   && null hGetSomeE
-                   && null hGetSomeAtE
-                   && null hPutSomeE
-                   && null hTruncateE
-                   && null hGetSizeE
-                   && null createDirectoryE
-                   && null createDirectoryIfMissingE
-                   && null listDirectoryE
-                   && null doesDirectoryExistE
-                   && null doesFileExistE
-                   && null removeFileE
-                   && null renameFileE
+allNull Errors {..} = Stream.null dumpStateE
+                   && Stream.null hOpenE
+                   && Stream.null hCloseE
+                   && Stream.null hSeekE
+                   && Stream.null hGetSomeE
+                   && Stream.null hGetSomeAtE
+                   && Stream.null hPutSomeE
+                   && Stream.null hTruncateE
+                   && Stream.null hGetSizeE
+                   && Stream.null createDirectoryE
+                   && Stream.null createDirectoryIfMissingE
+                   && Stream.null listDirectoryE
+                   && Stream.null doesDirectoryExistE
+                   && Stream.null doesFileExistE
+                   && Stream.null removeFileE
+                   && Stream.null renameFileE
 
 
 instance Show Errors where
@@ -253,10 +255,8 @@ instance Show Errors where
     where
       -- | Show a stream unless it is empty
       s :: Show a => String -> Stream a -> Maybe String
-      s _   (Stream []) = Nothing
-      -- While the testsuite currently never prints an infinite streams, it's
-      -- better to protect us against it when it were to happen accidentally.
-      s fld (Stream xs) = Just $ fld <> " = " <> show (take 50 xs)
+      s fld str | Stream.null str = Nothing
+                | otherwise       = Just $ fld <> " = " <> show str
 
       streams :: [String]
       streams = catMaybes
@@ -278,33 +278,8 @@ instance Show Errors where
         , s "renameFileE"               renameFileE
         ]
 
-instance Semigroup Errors where
-  egs1 <> egs2 = Errors
-      { dumpStateE                = combine dumpStateE
-      , hOpenE                    = combine hOpenE
-      , hCloseE                   = combine hCloseE
-      , hSeekE                    = combine hSeekE
-      , hGetSomeE                 = combine hGetSomeE
-      , hGetSomeAtE               = combine hGetSomeAtE
-      , hPutSomeE                 = combine hPutSomeE
-      , hTruncateE                = combine hTruncateE
-      , hGetSizeE                 = combine hGetSizeE
-      , createDirectoryE          = combine createDirectoryE
-      , createDirectoryIfMissingE = combine createDirectoryIfMissingE
-      , listDirectoryE            = combine listDirectoryE
-      , doesDirectoryExistE       = combine doesDirectoryExistE
-      , doesFileExistE            = combine doesFileExistE
-      , removeDirectoryRecursiveE = combine removeDirectoryRecursiveE
-      , removeFileE               = combine removeFileE
-      , renameFileE               = combine renameFileE
-      }
-    where
-      combine :: (Errors -> Stream a) -> Stream a
-      combine f = f egs1 <> f egs2
-
-instance Monoid Errors where
-  mappend = (<>)
-  mempty = simpleErrors mempty
+emptyErrors :: Errors
+emptyErrors = simpleErrors Stream.empty
 
 -- | Use the given 'ErrorStream' for each field/method. No corruption of
 -- 'hPutSome'.
@@ -337,13 +312,14 @@ genErrors :: Bool  -- ^ 'True' -> generate partial writes
           -> Bool  -- ^ 'True' -> generate 'SubstituteWithJunk' corruptions
           -> Gen Errors
 genErrors genPartialWrites genSubstituteWithJunk = do
-    let streamGen l = mkStreamGen l . QC.elements
+    let streamGen l = Stream.genInfinite . Stream.genMaybe' l . QC.elements
+        streamGen' l = Stream.genInfinite . Stream.genMaybe' l . QC.frequency
         -- TODO which errors are possible for these operations below (that
         -- have dummy for now)?
         dummy = streamGen 2 [ FsInsufficientPermissions ]
     dumpStateE          <- dummy
     -- TODO let this one fail:
-    let hCloseE = mkStream []
+    let hCloseE = Stream.empty
     hTruncateE          <- dummy
     doesDirectoryExistE <- dummy
     doesFileExistE      <- dummy
@@ -352,13 +328,13 @@ genErrors genPartialWrites genSubstituteWithJunk = do
       , FsResourceAlreadyInUse, FsResourceAlreadyExist
       , FsInsufficientPermissions, FsTooManyOpenFiles ]
     hSeekE      <- streamGen 3 [ FsReachedEOF ]
-    hGetSomeE   <- mkStreamGen 20 $ QC.frequency
+    hGetSomeE   <- streamGen' 20
       [ (1, return $ Left FsReachedEOF)
       , (3, Right <$> arbitrary) ]
-    hGetSomeAtE <- mkStreamGen 20 $ QC.frequency
+    hGetSomeAtE <- streamGen' 20
       [ (1, return $ Left FsReachedEOF)
       , (3, Right <$> arbitrary) ]
-    hPutSomeE   <- mkStreamGen 5 $ QC.frequency
+    hPutSomeE   <- streamGen' 5
       [ (1, Left . (FsDeviceFull, ) <$> QC.frequency
             [ (2, return Nothing)
             , (1, Just . PartialWrite <$> arbitrary)
@@ -390,28 +366,24 @@ genErrors genPartialWrites genSubstituteWithJunk = do
 instance Arbitrary Errors where
   arbitrary = genErrors True True
 
-  shrink err@Errors {..} = filter (not . allNull) $ catMaybes
-      [ (\s' -> err { dumpStateE = s' })                <$> dropLast dumpStateE
-      , (\s' -> err { hOpenE = s' })                    <$> dropLast hOpenE
-      , (\s' -> err { hCloseE = s' })                   <$> dropLast hCloseE
-      , (\s' -> err { hSeekE = s' })                    <$> dropLast hSeekE
-      , (\s' -> err { hGetSomeE = s' })                 <$> dropLast hGetSomeE
-      , (\s' -> err { hGetSomeAtE = s' })               <$> dropLast hGetSomeAtE
-      , (\s' -> err { hPutSomeE = s' })                 <$> dropLast hPutSomeE
-      , (\s' -> err { hTruncateE = s' })                <$> dropLast hTruncateE
-      , (\s' -> err { hGetSizeE = s' })                 <$> dropLast hGetSizeE
-      , (\s' -> err { createDirectoryE = s' })          <$> dropLast createDirectoryE
-      , (\s' -> err { createDirectoryIfMissingE = s' }) <$> dropLast createDirectoryIfMissingE
-      , (\s' -> err { listDirectoryE = s' })            <$> dropLast listDirectoryE
-      , (\s' -> err { doesDirectoryExistE = s' })       <$> dropLast doesDirectoryExistE
-      , (\s' -> err { doesFileExistE = s' })            <$> dropLast doesFileExistE
-      , (\s' -> err { removeFileE = s' })               <$> dropLast removeFileE
-      , (\s' -> err { renameFileE = s' })               <$> dropLast renameFileE
+  shrink err@Errors {..} = filter (not . allNull) $ concat
+      [ (\s' -> err { dumpStateE = s' })                <$> Stream.shrinkStream dumpStateE
+      , (\s' -> err { hOpenE = s' })                    <$> Stream.shrinkStream hOpenE
+      , (\s' -> err { hCloseE = s' })                   <$> Stream.shrinkStream hCloseE
+      , (\s' -> err { hSeekE = s' })                    <$> Stream.shrinkStream hSeekE
+      , (\s' -> err { hGetSomeE = s' })                 <$> Stream.shrinkStream hGetSomeE
+      , (\s' -> err { hGetSomeAtE = s' })               <$> Stream.shrinkStream hGetSomeAtE
+      , (\s' -> err { hPutSomeE = s' })                 <$> Stream.shrinkStream hPutSomeE
+      , (\s' -> err { hTruncateE = s' })                <$> Stream.shrinkStream hTruncateE
+      , (\s' -> err { hGetSizeE = s' })                 <$> Stream.shrinkStream hGetSizeE
+      , (\s' -> err { createDirectoryE = s' })          <$> Stream.shrinkStream createDirectoryE
+      , (\s' -> err { createDirectoryIfMissingE = s' }) <$> Stream.shrinkStream createDirectoryIfMissingE
+      , (\s' -> err { listDirectoryE = s' })            <$> Stream.shrinkStream listDirectoryE
+      , (\s' -> err { doesDirectoryExistE = s' })       <$> Stream.shrinkStream doesDirectoryExistE
+      , (\s' -> err { doesFileExistE = s' })            <$> Stream.shrinkStream doesFileExistE
+      , (\s' -> err { removeFileE = s' })               <$> Stream.shrinkStream removeFileE
+      , (\s' -> err { renameFileE = s' })               <$> Stream.shrinkStream renameFileE
       ]
-    where
-      dropLast :: Stream a -> Maybe (Stream a)
-      dropLast (Stream []) = Nothing
-      dropLast (Stream xs) = Just $ Stream $ zipWith const xs (drop 1 xs)
 
 {-------------------------------------------------------------------------------
   Simulate Errors monad
@@ -528,7 +500,7 @@ next :: MonadSTM m
 next errorsVar getter setter = do
     atomically $ do
       errors <- readTVar errorsVar
-      let (mb, s') = runStream (getter errors)
+      let (mb, s') = Stream.runStream (getter errors)
       writeTVar errorsVar (setter s' errors)
       return mb
 
