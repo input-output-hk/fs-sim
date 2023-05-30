@@ -1,6 +1,12 @@
 # Revision history for fs-api
 
-### 0.1.0.2 -- 2023-05-25
+## next version
+
+### Patch
+
+* Enable building with `ghc-9.4`.
+
+## 0.1.0.2 -- 2023-05-25
 
 * Enable building with ghc-9.6
 
