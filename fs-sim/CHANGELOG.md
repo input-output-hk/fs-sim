@@ -1,11 +1,15 @@
 # Revision history for fs-sim
 
-## Next version
+## next version
 
 ### Non-breaking
 
 * Add `simHasFS'` and `mkSimErrorHasFS'`, which are alternatives to `simHasFS`
   and `mkSimErrorHasFS` that create `TVar`s internally.
+
+### Patch
+
+* Enable building with `ghc-9.4`.
 
 ## 0.1.0.2 -- 2023-05-25
 
