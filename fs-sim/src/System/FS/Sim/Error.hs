@@ -12,6 +12,7 @@
 module System.FS.Sim.Error (
     -- * Simulate Errors monad
     mkSimErrorHasFS
+  , mkSimErrorHasFS'
   , runSimErrorFS
   , withErrors
     -- * Streams
@@ -476,6 +477,14 @@ instance Arbitrary Errors where
   Simulate Errors monad
 -------------------------------------------------------------------------------}
 
+-- | Alternative to 'mkSimErrorHasFS' that creates 'TVar's internally.
+mkSimErrorHasFS' :: (MonadSTM m, MonadThrow m)
+                 => MockFS
+                 -> Errors
+                 -> m (HasFS m HandleMock)
+mkSimErrorHasFS' mockFS errs =
+    mkSimErrorHasFS <$> newTVarIO mockFS <*> newTVarIO errs
+
 -- | Introduce possibility of errors
 --
 -- TODO: Lenses would be nice for the setters
@@ -548,7 +557,7 @@ runSimErrorFS mockFS errors action = do
     fsVar     <- newTVarIO mockFS
     errorsVar <- newTVarIO errors
     a         <- action errorsVar $ mkSimErrorHasFS fsVar errorsVar
-    fs'       <- atomically $ readTVar fsVar
+    fs'       <- readTVarIO fsVar
     return (a, fs')
 
 -- | Execute the next action using the given 'Errors'. After the action is
