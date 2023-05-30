@@ -479,9 +479,9 @@ instance Arbitrary Errors where
 
 -- | Alternative to 'mkSimErrorHasFS' that creates 'TVar's internally.
 mkSimErrorHasFS' :: (MonadSTM m, MonadThrow m)
-                => MockFS
-                -> Errors
-                -> m (HasFS m HandleMock)
+                 => MockFS
+                 -> Errors
+                 -> m (HasFS m HandleMock)
 mkSimErrorHasFS' mockFS errs =
     mkSimErrorHasFS <$> newTVarIO mockFS <*> newTVarIO errs
 
@@ -557,7 +557,7 @@ runSimErrorFS mockFS errors action = do
     fsVar     <- newTVarIO mockFS
     errorsVar <- newTVarIO errors
     a         <- action errorsVar $ mkSimErrorHasFS fsVar errorsVar
-    fs'       <- atomically $ readTVar fsVar
+    fs'       <- readTVarIO fsVar
     return (a, fs')
 
 -- | Execute the next action using the given 'Errors'. After the action is

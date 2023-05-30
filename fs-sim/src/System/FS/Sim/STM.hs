@@ -37,8 +37,8 @@ runSimFS fs act = do
 
 -- | Alternative to 'simHasFS' that creates 'TVar's internally.
 simHasFS' :: (MonadSTM m, MonadThrow m)
-         => MockFS
-         -> m (HasFS m HandleMock)
+          => MockFS
+          -> m (HasFS m HandleMock)
 simHasFS' mockFS = simHasFS <$> newTVarIO mockFS
 
 -- | Equip @m@ with a @HasFs@ instance using the mock file system
