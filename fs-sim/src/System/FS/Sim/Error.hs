@@ -1,11 +1,9 @@
-{-# LANGUAGE DeriveFunctor              #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE LambdaCase                 #-}
-{-# LANGUAGE MultiParamTypeClasses      #-}
-{-# LANGUAGE RecordWildCards            #-}
-{-# LANGUAGE ScopedTypeVariables        #-}
-{-# LANGUAGE TupleSections              #-}
-{-# LANGUAGE UndecidableInstances       #-}
+{-# LANGUAGE LambdaCase            #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TupleSections         #-}
+{-# LANGUAGE UndecidableInstances  #-}
 
 -- | 'HasFS' instance wrapping 'SimFS' that generates errors, suitable for
 -- testing error handling.
@@ -19,12 +17,6 @@ module System.FS.Sim.Error (
   , ErrorStream
   , ErrorStreamGetSome
   , ErrorStreamPutSome
-  , Stream (..)
-  , always
-  , mkStream
-  , mkStreamGen
-  , null
-  , runStream
     -- * Generating partial reads/writes
   , Partial (..)
   , hGetSomePartial
@@ -46,7 +38,7 @@ module System.FS.Sim.Error (
 import           Prelude hiding (null)
 
 import           Control.Concurrent.Class.MonadSTM.Strict
-import           Control.Monad (replicateM, void)
+import           Control.Monad (void)
 import           Control.Monad.Class.MonadThrow hiding (handle)
 
 import           Data.ByteString (ByteString)
@@ -55,9 +47,9 @@ import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy.Char8 as LC8
 import           Data.Foldable (for_)
-import           Data.List (dropWhileEnd, intercalate)
+import           Data.List (intercalate)
 import qualified Data.List as List
-import           Data.Maybe (catMaybes, isNothing)
+import           Data.Maybe (catMaybes)
 import           Data.String (IsString (..))
 import           Data.Word (Word64)
 
@@ -72,63 +64,11 @@ import           System.FS.API.Types
 
 import           System.FS.Sim.MockFS (HandleMock, MockFS)
 import qualified System.FS.Sim.STM as Sim
+import           System.FS.Sim.Stream
 
 {-------------------------------------------------------------------------------
-  Streams
+  Streams of errors
 -------------------------------------------------------------------------------}
-
--- | A 'Stream' is a possibly infinite stream of @'Maybe' a@s.
-newtype Stream a = Stream { getStream :: [Maybe a] }
-    deriving (Show, Functor)
-
-instance Semigroup (Stream a) where
-  Stream s1 <> Stream s2 = Stream (zipWith pickLast s1 s2)
-    where
-      pickLast (Just x) Nothing = Just x
-      pickLast _        mbY     = mbY
-
-instance Monoid (Stream a) where
-  mempty  = Stream (repeat Nothing)
-  mappend = (<>)
-
--- | Create a 'Stream' based on the given possibly infinite list of @'Maybe'
--- a@s.
-mkStream :: [Maybe a] -> Stream a
-mkStream = Stream
-
--- | Advance the 'Stream'. Return the @'Maybe' a@ and the remaining 'Stream'.
-runStream :: Stream a -> (Maybe a, Stream a)
-runStream s@(Stream [])     = (Nothing, s)
-runStream   (Stream (a:as)) = (a, Stream as)
-
--- | Make a 'Stream' that always generates the given @a@.
-always :: a -> Stream a
-always a = Stream (repeat (Just a))
-
--- | Make a 'Stream' generator based on a @a@ generator.
---
--- The generator generates a finite stream of 10 elements, where each element
--- has a chance of being either 'Nothing' or an element generated with the
--- given @a@ generator (wrapped in a 'Just').
---
--- The first argument is the likelihood (as used by 'QC.frequency') of a
--- 'Just' where 'Nothing' has likelihood 2.
-mkStreamGen :: Int -> Gen a -> Gen (Stream a)
-mkStreamGen justLikelihood genA =
-    mkStream . dropWhileEnd isNothing <$> replicateM 10 mbGenA
-  where
-    mbGenA = QC.frequency
-      [ (2, return Nothing)
-      , (justLikelihood, Just <$> genA)
-      ]
-
--- | Return 'True' if the stream is empty.
---
--- A stream consisting of only 'Nothing's (even if it is only one) is not
--- considered to be empty.
-null :: Stream a -> Bool
-null (Stream []) = True
-null _           = False
 
 -- | An 'ErrorStream' is a possibly infinite 'Stream' of (@Maybe@)
 -- @'FsErrorType'@s.
