@@ -2,6 +2,10 @@
 
 ## next version
 
+### Breaking
+
+* Move `Stream`-related functions to new `System.FS.Sim.Stream` module.
+
 ### Non-breaking
 
 * Add `simHasFS'` and `mkSimErrorHasFS'`, which are alternatives to `simHasFS`
