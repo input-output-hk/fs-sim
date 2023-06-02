@@ -1,6 +1,6 @@
 # Revision history for fs-sim
 
-## next version
+## 0.2.0.0 -- 2023-06-02
 
 ### Breaking
 
@@ -23,6 +23,7 @@
 ### Patch
 
 * Enable building with `ghc-9.4`.
+* Remove `asserts` package flag.
 
 ## 0.1.0.2 -- 2023-05-25
 
