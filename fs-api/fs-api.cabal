@@ -1,6 +1,6 @@
 cabal-version:   3.0
 name:            fs-api
-version:         0.1.0.2
+version:         0.1.0.3
 synopsis:        API for file systems
 description:     API for file systems.
 license:         Apache-2.0
@@ -9,7 +9,7 @@ license-files:
   NOTICE
 
 copyright:       2019-2023 Input Output Global Inc (IOG)
-author:          IOHK Engineering Team
+author:          IOG Engineering Team
 maintainer:      operations@iohk.io
 category:        System
 build-type:      Simple
@@ -20,11 +20,6 @@ source-repository head
   type:     git
   location: https://github.com/input-output-hk/fs-sim
   subdir:   fs-api
-
-flag asserts
-  description: Enable assertions
-  manual:      False
-  default:     False
 
 library
   hs-source-dirs:   src
@@ -69,6 +64,3 @@ library
     -Wall -Wcompat -Wincomplete-uni-patterns
     -Wincomplete-record-updates -Wpartial-fields -Widentities
     -Wredundant-constraints -Wmissing-export-lists -Wunused-packages
-
-  if flag(asserts)
-    ghc-options: -fno-ignore-asserts
