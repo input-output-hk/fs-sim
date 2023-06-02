@@ -1,10 +1,11 @@
 # Revision history for fs-api
 
-## next version
+## 0.1.0.3 -- 2023-06-2
 
 ### Patch
 
 * Enable building with `ghc-9.4`.
+* Remove `asserts` package flag.
 
 ## 0.1.0.2 -- 2023-05-25
 
