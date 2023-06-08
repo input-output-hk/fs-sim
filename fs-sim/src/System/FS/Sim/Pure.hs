@@ -11,7 +11,6 @@ import           Control.Monad.Except
 import           Control.Monad.State
 
 import           System.FS.API
-import           System.FS.API.Types
 
 import qualified System.FS.Sim.MockFS as Mock
 import           System.FS.Sim.MockFS (MockFS)

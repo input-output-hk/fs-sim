@@ -92,8 +92,7 @@ import qualified Test.StateMachine.Types.Rank2 as Rank2
 import           Test.Tasty (TestTree, testGroup)
 import           Test.Tasty.QuickCheck
 
-import           System.FS.API (HasFS (..))
-import           System.FS.API.Types
+import           System.FS.API
 import           System.FS.IO
 import qualified System.FS.IO.Internal as F
 

@@ -26,8 +26,8 @@ import           Data.Word
 import           Foreign.Storable (Storable)
 import           GHC.Generics (Generic)
 import           GHC.Stack
-import           System.FS.API
-import           System.FS.API.Types (AbsOffset (..))
+import           System.FS.API.Lazy
+import           System.FS.API.Strict
 
 {-------------------------------------------------------------------------------
   Wrap functionality from digest

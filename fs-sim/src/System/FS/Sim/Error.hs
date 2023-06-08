@@ -61,7 +61,6 @@ import           Test.QuickCheck (ASCIIString (..), Arbitrary (..), Gen,
 import           Util.CallStack
 
 import           System.FS.API
-import           System.FS.API.Types
 
 import           System.FS.Sim.MockFS (HandleMock, MockFS)
 import qualified System.FS.Sim.STM as Sim
