@@ -15,8 +15,8 @@ import           GHC.Stack
 import qualified System.Directory as Dir
 import           System.FS.API
 import           System.FS.API.Types
-import qualified System.FS.Handle as H
-import qualified System.IO.FS as F
+import qualified System.FS.IO.Internal as F
+import qualified System.FS.IO.Internal.Handle as H
 
 {-------------------------------------------------------------------------------
   I/O implementation of HasFS
