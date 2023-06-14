@@ -95,7 +95,7 @@ import           Test.Tasty.QuickCheck
 import           System.FS.API (HasFS (..))
 import           System.FS.API.Types
 import           System.FS.IO
-import qualified System.IO.FS as F
+import qualified System.FS.IO.Internal as F
 
 import           Util.Condense
 

@@ -1,8 +1,8 @@
 {-# LANGUAGE LambdaCase #-}
 
--- | This is meant to be used for the implementation of HasFS
--- instances and not directly by client code.
-module System.FS.Handle (
+-- | This is meant to be used for the implementation of HasFS instances and not
+-- directly by client code.
+module System.FS.IO.Internal.Handle (
     HandleOS (..)
   , closeHandleOS
   , isHandleClosedException

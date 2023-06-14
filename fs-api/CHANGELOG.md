@@ -1,5 +1,14 @@
 # Revision history for fs-api
 
+## next version
+
+### Breaking
+
+* Modules that are required for `ioHasFS` should never be used by client code.
+  For this reason, we move the relevant modules into an `Internal` hierarchy.
+  * Move the `System.IO.FS` module to `System.FS.IO.Internal`.
+  * Move the `System.FS.Handle` module to `System.FS.IO.Internal.Handle`.
+
 ## 0.1.0.3 -- 2023-06-2
 
 ### Patch

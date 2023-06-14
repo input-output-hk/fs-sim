@@ -1,7 +1,9 @@
 {-# LANGUAGE CPP            #-}
 {-# LANGUAGE PackageImports #-}
 
-module System.IO.FS (
+-- | This is meant to be used for the implementation of HasFS instances and not
+-- directly by client code.
+module System.FS.IO.Internal (
     FHandle
   , close
   , getSize
@@ -24,7 +26,7 @@ import           Data.Word (Word32, Word64, Word8)
 import           Foreign (Ptr)
 import           System.FS.API.Types (AllowExisting (..), FsError,
                      OpenMode (..), SeekMode (..), sameFsError)
-import           System.FS.Handle
+import           System.FS.IO.Internal.Handle
 import qualified System.Posix as Posix
 import           System.Posix (Fd)
 import           System.Posix.IO.ByteString.Ext (fdPreadBuf)
