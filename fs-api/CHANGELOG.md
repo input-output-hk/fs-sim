@@ -8,6 +8,11 @@
   For this reason, we move the relevant modules into an `Internal` hierarchy.
   * Move the `System.IO.FS` module to `System.FS.IO.Internal`.
   * Move the `System.FS.Handle` module to `System.FS.IO.Internal.Handle`.
+* Move strict and lazy compound definitions for reading/writing bytes into separate modules `System.FS.API.Strict` and `System.FS.API.Lazy`. Both modules re-export `System.FS.API`.
+
+### Non-breaking
+
+* Re-export `System.FS.API.Types` from `System.FS.API`.
 
 ## 0.1.0.3 -- 2023-06-2
 

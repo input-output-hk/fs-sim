@@ -12,7 +12,6 @@ import           Control.Concurrent.Class.MonadSTM.Strict
 import           Control.Monad.Class.MonadThrow
 
 import           System.FS.API
-import           System.FS.API.Types
 
 import qualified System.FS.Sim.MockFS as Mock
 import           System.FS.Sim.MockFS (HandleMock, MockFS)

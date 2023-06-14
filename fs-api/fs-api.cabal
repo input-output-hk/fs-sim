@@ -32,6 +32,8 @@ library
 
   exposed-modules:
     System.FS.API
+    System.FS.API.Lazy
+    System.FS.API.Strict
     System.FS.API.Types
     System.FS.CRC
     System.FS.IO
