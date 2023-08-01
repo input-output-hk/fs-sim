@@ -55,13 +55,3 @@ like `A.B.C.D`.
 * `C` is the *minor* version number. A bump indicates a non-breaking change.
 * `D` is the *patch* version number. A bump indicates a small, non-breaking
   patch.
-
-To prevent accidental breakage for downstream packages, `fs-api` and `fs-sim`
-should be released in lockstep with respect to major version bumps. This means
-that a major version bump for `fs-api` should result in a major version bump for
-`fs-sim`, and vice versa. `fs-api` and `fs-sim` can be released invidivually
-when only minor or patch version numbers are bumped. Preferably, `fs-sim-x.y.*`
-should have a caret bound on `fs-api-x.y.*`, i.e., `^>= fs-api-x.y`
-
-NOTE: before `fs-sim-0.3.*` and `fs-api-0.3.*`, both packages were not released
-in lockstep.
