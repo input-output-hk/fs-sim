@@ -22,17 +22,21 @@ cabal test all
 ## Code style
 
 There is no strict code style, but try to keep the code style consistent
-throughout the repository and favour readability. Code should be well-documented and well-tested.
+throughout the repository and favour readability. Code should be well-documented
+and well-tested.
 
 ## Formatting
 
 We use `stylish-haskell` to format Haskell files, and we use `cabal-fmt` to
-format `*.cabal` files. We also use `cabal check` to sanity check our cabal files. See the helpful scripts in the [scripts folder](./scripts/), and the [`stylish-haskell` configuration file](./.stylish-haskell.yaml).
+format `*.cabal` files. We also use `cabal check` to sanity check our cabal
+files. See the helpful scripts in the [scripts folder](./scripts/), and the
+[`stylish-haskell` configuration file](./.stylish-haskell.yaml).
 
 ## Pull requests
 
 The following are requirements for merging a PR into `main`:
-* Each commit should be small and should preferably address one thing. Commit messages should be useful.
+* Each commit should be small and should preferably address one thing. Commit
+  messages should be useful.
 * Document and test your changes.
 * The PR should have a useful description, and it should link issues that it
   resolves (if any).
@@ -44,7 +48,20 @@ The following are requirements for merging a PR into `main`:
 
 ## Releases
 
-Releases follow the [Haskell Package Versioning Policy](https://pvp.haskell.org/). We use version numbers consisting of 4 parts, like `A.B.C.D`.
+Releases follow the [Haskell Package Versioning
+Policy](https://pvp.haskell.org/). We use version numbers consisting of 4 parts,
+like `A.B.C.D`.
 * `A.B` is the *major* version number. A bump indicates a breaking change.
 * `C` is the *minor* version number. A bump indicates a non-breaking change.
-* `D` is the *patch* version number. A bump indicates a small, non-breaking patch.
+* `D` is the *patch* version number. A bump indicates a small, non-breaking
+  patch.
+
+To prevent accidental breakage for downstream packages, `fs-api` and `fs-sim`
+should be released in lockstep with respect to major version bumps. This means
+that a major version bump for `fs-api` should result in a major version bump for
+`fs-sim`, and vice versa. `fs-api` and `fs-sim` can be released invidivually
+when only minor or patch version numbers are bumped. Preferably, `fs-sim-x.y.*`
+should have a caret bound on `fs-api-x.y.*`, i.e., `^>= fs-api-x.y`
+
+NOTE: before `fs-sim-0.3.*` and `fs-api-0.3.*`, both packages were not released
+in lockstep.
