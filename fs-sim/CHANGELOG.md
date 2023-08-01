@@ -1,6 +1,6 @@
 # Revision history for fs-sim
 
-## 0.2.1.0 -- 2023-06-02
+## 0.2.1.0 -- 2023-08-01
 
 ### Non-breaking
 
