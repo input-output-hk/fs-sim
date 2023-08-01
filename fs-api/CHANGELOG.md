@@ -14,6 +14,10 @@
 
 * Re-export `System.FS.API.Types` from `System.FS.API`.
 
+### Patch
+
+* Bump upper version bounds for `io-classes` to `1.3`
+
 ## 0.1.0.3 -- 2023-06-2
 
 ### Patch
