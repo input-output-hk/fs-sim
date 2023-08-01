@@ -1,5 +1,15 @@
 # Revision history for fs-sim
 
+## 0.2.1.0 -- 2023-06-02
+
+### Non-breaking
+
+* Build with `fs-api ^>=0.2`.
+
+### Patch
+
+* Bump upper version bounds for `io-classes` and `strict-stm` to `1.3`
+
 ## 0.2.0.0 -- 2023-06-02
 
 ### Breaking

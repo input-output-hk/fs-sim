@@ -1,6 +1,6 @@
 cabal-version:   3.0
 name:            fs-api
-version:         0.1.0.3
+version:         0.2.0.0
 synopsis:        API for file systems
 description:     API for file systems.
 license:         Apache-2.0
@@ -51,7 +51,7 @@ library
     , digest
     , directory   >=1.3  && <1.4
     , filepath    >=1.4  && <1.5
-    , io-classes  >=0.3  && <1.2
+    , io-classes  >=0.3  && <1.3
     , text        >=1.2  && <2.1
 
   if os(windows)
