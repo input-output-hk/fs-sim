@@ -1,8 +1,8 @@
 # Revision history for fs-sim
 
-## 0.2.1.0 -- 2023-06-02
+## 0.3.0.0 -- 2023-08-01
 
-### Non-breaking
+### Breaking
 
 * Build with `fs-api ^>=0.2`.
 
