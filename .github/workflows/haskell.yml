@@ -52,9 +52,9 @@ jobs:
         path: ${{ steps.setup-haskell.outputs.cabal-store }}
         key: ${{ runner.os }}-${{ matrix.ghc }}-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
         restore-keys: |
+          ${{ runner.os }}-${{ matrix.ghc }}-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
+          ${{ runner.os }}-${{ matrix.ghc }}-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-
           ${{ runner.os }}-${{ matrix.ghc }}-${{ env.cache-name }}-
-          ${{ runner.os }}-${{ matrix.ghc }}-
-          ${{ runner.os }}-
 
     - name: Install cabal dependencies
       run: cabal build --only-dependencies --enable-tests --enable-benchmarks all
@@ -107,9 +107,9 @@ jobs:
         path: ${{ steps.setup-haskell.outputs.cabal-store }}
         key: ${{ runner.os }}-${{ matrix.ghc }}-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
         restore-keys: |
+          ${{ runner.os }}-${{ matrix.ghc }}-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
+          ${{ runner.os }}-${{ matrix.ghc }}-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-
           ${{ runner.os }}-${{ matrix.ghc }}-${{ env.cache-name }}-
-          ${{ runner.os }}-${{ matrix.ghc }}-
-          ${{ runner.os }}-
 
     - name: Install stylish-haskell
       run: cabal install stylish-haskell --constraint 'stylish-haskell == 0.14.4.0'
@@ -166,9 +166,9 @@ jobs:
         path: ${{ steps.setup-haskell.outputs.cabal-store }}
         key: ${{ runner.os }}-${{ matrix.ghc }}-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
         restore-keys: |
+          ${{ runner.os }}-${{ matrix.ghc }}-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
+          ${{ runner.os }}-${{ matrix.ghc }}-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-
           ${{ runner.os }}-${{ matrix.ghc }}-${{ env.cache-name }}-
-          ${{ runner.os }}-${{ matrix.ghc }}-
-          ${{ runner.os }}-
 
     - name: Install cabal-fmt
       run: cabal install cabal-fmt --constraint 'cabal-fmt == 0.1.6'

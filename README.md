@@ -1,7 +1,10 @@
-[![Haskell CI](https://img.shields.io/github/actions/workflow/status/input-output-hk/fs-sim/haskell.yml?label=Build&style=for-the-badge)](https://github.com/input-output-hk/fs-sim/actions/workflows/haskell.yml)
-[![handbook](https://img.shields.io/badge/policy-Cardano%20Engineering%20Handbook-informational?style=for-the-badge)](https://input-output-hk.github.io/cardano-engineering-handbook)
-
 # fs-sim
+
+[![handbook](https://img.shields.io/badge/policy-Cardano%20Engineering%20Handbook-informational)](https://input-output-hk.github.io/cardano-engineering-handbook)
+[![Haskell CI](https://img.shields.io/github/actions/workflow/status/input-output-hk/fs-sim/haskell.yml?label=Build)](https://github.com/input-output-hk/fs-sim/actions/workflows/haskell.yml)
+[![Documentation CI](https://img.shields.io/github/actions/workflow/status/input-output-hk/fs-sim/documentation.yml?label=Documentation%20build)](https://github.com/input-output-hk/fs-sim/actions/workflows/documentation.yml)
+[![Haddocks](https://img.shields.io/badge/documentation-Haddocks-purple)](https://input-output-hk.github.io/fs-sim/)
+
 
 The [`fs-sim`](./fs-sim/README.md) package provides a filesystem simulator that
 facilitates simulation of errors and file corruption. This simulator is
