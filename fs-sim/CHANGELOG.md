@@ -1,6 +1,6 @@
 # Revision history for fs-sim
 
-## ??? -- ???
+## 0.2.1.1 -- 2023-10-30
 
 ### Patch
 
