@@ -1,5 +1,10 @@
 name: Haskell CI
 
+# Limit concurrent runs of this workflow within a single PR
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [ "main" ]
@@ -16,8 +21,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["8.10.7", "9.2.7", "9.4.5", "9.6.1"]
-        cabal: ["3.10.1.0"]
+        ghc: ["8.10.7", "9.2.8", "9.4.8", "9.6.3", "9.8.1"]
+        cabal: ["3.10.2.0"]
         os: [ubuntu-latest, windows-latest, macOS-latest]
 
     steps:
@@ -72,8 +77,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.2.7"]
-        cabal: ["3.10.1.0"]
+        ghc: ["9.2.8"]
+        cabal: ["3.10.2.0"]
         os: [ubuntu-latest]
 
     steps:
@@ -131,8 +136,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.2.7"]
-        cabal: ["3.10.1.0"]
+        ghc: ["9.2.8"]
+        cabal: ["3.10.2.0"]
         os: [ubuntu-latest]
 
     steps:
@@ -190,8 +195,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.2.7"]
-        cabal: ["3.10.1.0"]
+        ghc: ["9.2.8"]
+        cabal: ["3.10.2.0"]
         os: [ubuntu-latest]
 
     steps:

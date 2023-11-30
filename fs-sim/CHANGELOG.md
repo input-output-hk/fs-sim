@@ -1,5 +1,11 @@
 # Revision history for fs-sim
 
+## ??? -- ???
+
+### Patch
+
+* Make it build with `ghc-9.8`.
+
 ## 0.2.1.0 -- 2023-08-01
 
 ### Non-breaking

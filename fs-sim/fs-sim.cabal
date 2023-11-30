@@ -14,7 +14,7 @@ maintainer:      operations@iohk.io
 category:        Testing
 build-type:      Simple
 extra-doc-files: CHANGELOG.md
-tested-with:     GHC ==8.10 || ==9.2 || ==9.4 || ==9.6
+tested-with:     GHC ==8.10 || ==9.2 || ==9.4 || ==9.6 || ==9.8
 
 source-repository head
   type:     git
@@ -69,7 +69,7 @@ test-suite fs-sim-test
     , generics-sop
     , pretty-show
     , QuickCheck
-    , quickcheck-state-machine  >=0.7.2
+    , quickcheck-state-machine  >=0.7.2 && <0.8
     , random
     , tasty
     , tasty-hunit
