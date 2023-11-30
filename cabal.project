@@ -17,3 +17,9 @@ packages:
 tests: True
 test-show-details: direct
 benchmarks: True
+
+if impl(ghc >=9.8)
+  allow-newer:
+    -- https://github.com/wrengr/unix-bytestring/pull/46
+    , unix-bytestring:base
+
