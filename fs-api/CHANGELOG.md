@@ -1,5 +1,11 @@
 # Revision history for fs-api
 
+## next release -- ????-??-??
+
+### Patch
+
+* Make internal error comparison function more lenient on MacOS systems.
+
 ## 0.2.0.1 -- 2023-10-30
 
 ### Patch

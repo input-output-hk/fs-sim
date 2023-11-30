@@ -23,13 +23,6 @@ source-repository head
 
 library
   hs-source-dirs:   src
-
-  if os(windows)
-    hs-source-dirs: src-win32
-
-  else
-    hs-source-dirs: src-unix
-
   exposed-modules:
     System.FS.API
     System.FS.API.Lazy
@@ -55,12 +48,22 @@ library
     , text        >=1.2  && <2.2
 
   if os(windows)
-    build-depends: Win32 >=2.6.1.0
+    hs-source-dirs: src-win32
+    build-depends:  Win32 >=2.6.1.0
 
   else
+    hs-source-dirs:  src-unix
     build-depends:
       , unix
       , unix-bytestring  >=0.4.0
+
+    exposed-modules: System.FS.IO.Internal.Error
+
+    if os(linux)
+      hs-source-dirs: src-linux
+
+    else
+      hs-source-dirs: src-macos
 
   ghc-options:
     -Wall -Wcompat -Wincomplete-uni-patterns

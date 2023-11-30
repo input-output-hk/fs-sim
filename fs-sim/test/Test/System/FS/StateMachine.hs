@@ -17,6 +17,7 @@
 {-# LANGUAGE UndecidableInstances     #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
+{- HLINT ignore "Use camelCase" -}
 
 -- | Tests for our filesystem abstractions.
 --
@@ -74,7 +75,7 @@ import           Data.TreeDiff (ToExpr (..), defaultExprViaShow)
 import           Data.Word (Word64)
 import qualified Generics.SOP as SOP
 import           GHC.Generics
-import           GHC.Stack
+import           GHC.Stack hiding (prettyCallStack)
 import           System.IO.Temp (withTempDirectory)
 import           System.Random (getStdRandom, randomR)
 import           Text.Read (readMaybe)
@@ -89,13 +90,14 @@ import qualified Test.StateMachine.Labelling as C
 import qualified Test.StateMachine.Sequential as QSM
 import qualified Test.StateMachine.Types as QSM
 import qualified Test.StateMachine.Types.Rank2 as Rank2
-import           Test.Tasty (TestTree, testGroup)
+import           Test.Tasty (TestTree, localOption, testGroup)
 import           Test.Tasty.QuickCheck
 
 import           System.FS.API
 import           System.FS.IO
 import qualified System.FS.IO.Internal as F
 
+import           Util.CallStack
 import           Util.Condense
 
 import           System.FS.Sim.FsTree (FsTree (..))
@@ -1445,7 +1447,10 @@ showLabelledExamples = showLabelledExamples' Nothing 1000 (const True)
 
 prop_sequential :: FilePath -> Property
 prop_sequential tmpDir = withMaxSuccess 1000 $
-    QSM.forAllCommands (sm mountUnused) Nothing $ \cmds -> QC.monadicIO $ do
+    QSM.forAllCommands (sm mountUnused) Nothing $ runCmds tmpDir
+
+runCmds :: FilePath -> QSM.Commands (At Cmd) (At Resp) -> Property
+runCmds tmpDir cmds = QC.monadicIO $ do
       (tstTmpDir, hist, res) <- QC.run $
         withTempDirectory tmpDir "HasFS" $ \tstTmpDir -> do
           let mount = MountPoint tstTmpDir
@@ -1467,6 +1472,8 @@ prop_sequential tmpDir = withMaxSuccess 1000 $
 tests :: FilePath -> TestTree
 tests tmpDir = testGroup "HasFS" [
       testProperty "q-s-m" $ prop_sequential tmpDir
+    , localOption (QuickCheckTests 1)
+    $ testProperty "regression_removeFileOnDir" $ runCmds tmpDir regression_removeFileOnDir
     ]
 
 -- | Unused mount mount
@@ -1478,6 +1485,37 @@ tests tmpDir = testGroup "HasFS" [
 -- for execution.
 mountUnused :: MountPoint
 mountUnused = error "mount point not used during command generation"
+
+-- | The error numbers returned by Linux vs. MacOS differ when using
+-- 'removeFile' on a directory. The model mainly mimicks Linux-style errors,
+-- which results in an 'FsResourceInappropriateType' error, whereas on MacOS it
+-- results in an 'FsInsufficientPermissions' error. The implementation of
+-- 'F.sameError' was made more lenient for MacOS in fs-sim#41 to allow this
+-- model-SUT discrepancy to occur without making the tests fail. We might revist
+-- this /temporary/ fix in the future, see fs-sim#45.
+regression_removeFileOnDir :: QSM.Commands (At Cmd) (At Resp)
+regression_removeFileOnDir = QSM.Commands {unCommands = [
+      QSM.Command
+        (At {unAt =
+          CreateDirIfMissing
+            True
+            (PExpPath (mkFsPath ["x"]))})
+        (At {unAt = Resp {getResp =
+          Right (Path (QSM.Reference (QSM.Symbolic (QSM.Var 0))) ())}})
+        [QSM.Var 0]
+    , QSM.Command
+        (At {unAt =
+          RemoveFile
+            (PExpPath (mkFsPath ["x"]))})
+        (At {unAt = Resp {getResp =
+          Left (FsError {
+              fsErrorType = FsResourceInappropriateType
+            , fsErrorPath = FsErrorPath Nothing (mkFsPath ["x"])
+            , fsErrorString = "expected file"
+            , fsErrorNo = Nothing
+            , fsErrorStack = prettyCallStack, fsLimitation = False})}})
+        []
+    ]}
 
 {-------------------------------------------------------------------------------
   Debugging
