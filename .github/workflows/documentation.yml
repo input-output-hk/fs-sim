@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   # Sources
-  # * https://github.com/haskell/actions/tree/v2/setup#model-cabal-workflow-with-caching
+  # * https://github.com/haskell-actions/setup#model-cabal-workflow-with-caching
   # * https://haskell-haddock.readthedocs.io/en/latest/multi-components.html
   # * https://github.com/input-output-hk/ouroboros-consensus/blob/b0a6f9148d3c3783cb9980c756162426f8066471/.github/workflows/ci.yml
   # * https://github.com/input-output-hk/ouroboros-consensus/blob/4ff9aa5596598bb3681864b830c8a33e294d9bfe/scripts/docs/haddocks.sh
@@ -30,7 +30,7 @@ jobs:
 
     env:
       ghc: "9.2.8"
-      cabal: "3.10.1.0"
+      cabal: "3.10.2.0"
       os: ubuntu-latest"
 
     steps:
@@ -39,7 +39,7 @@ jobs:
 
     - name: Setup Haskell
       id: setup-haskell
-      uses: haskell/actions/setup@v2
+      uses: haskel-actions/setup@v2
       with:
         ghc-version: ${{ env.ghc }}
         cabal-version: ${{ env.cabal }}
