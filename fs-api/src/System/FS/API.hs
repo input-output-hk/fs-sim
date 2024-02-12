@@ -67,7 +67,8 @@ data HasFS m h = HasFS {
     -- will always return at least 1 byte, as returning 0 bytes would mean
     -- that we have reached EOF.
     --
-    -- Postcondition: the length of the returned bytestring <= @n@ and >= 0.
+    -- Postcondition: for the length of the returned bytestring @bs@ we have
+    -- @length bs >= 0@ and @length bs <= n@.
   , hGetSome                 :: HasCallStack => Handle h -> Word64 -> m BS.ByteString
 
     -- | Same as 'hGetSome', but does not affect the file offset. An additional argument
@@ -89,8 +90,8 @@ data HasFS m h = HasFS {
     --
     -- If nothing can be written at all, an exception will be thrown.
     --
-    -- Postcondition: the return value <= @l@ and > 0, unless the given
-    -- bytestring is empty, in which case the return value can be 0.
+    -- Postcondition: the return value @n@ is @n > 0@ and @n <= l@, unless the
+    -- given bytestring is empty, in which case @n@ can be 0.
   , hPutSome                 :: HasCallStack => Handle h -> BS.ByteString -> m Word64
 
     -- | Truncate the file to the specified size

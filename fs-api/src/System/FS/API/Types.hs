@@ -66,7 +66,7 @@ import           Util.Condense
   Modes
 -------------------------------------------------------------------------------}
 
--- | How to 'hOpen' a new file.
+-- | How to 'System.FS.API.hOpen' a new file.
 data OpenMode
   = ReadMode
   | WriteMode     AllowExisting
@@ -74,7 +74,7 @@ data OpenMode
   | ReadWriteMode AllowExisting
   deriving (Eq, Show)
 
--- | When 'hOpen'ing a file:
+-- | When opening a file:
 data AllowExisting
   = AllowExisting
     -- ^ The file may already exist. If it does, it is reopened. If it
@@ -299,7 +299,7 @@ ioToFsError fep ioErr = FsError
 --
 -- Note that we don't always use the classification made by
 -- 'Foreign.C.Error.errnoToIOError' (also see 'System.IO.Error') because it
--- combines some errors into one 'IOErrorType', e.g., @EMFILE@ (too many open
+-- combines some errors into one 'IO.IOErrorType', e.g., @EMFILE@ (too many open
 -- files) and @ENOSPC@ (no space left on device) both result in
 -- 'ResourceExhausted' while we want to keep them separate. For this reason,
 -- we do a classification of our own based on the @errno@ while sometimes
