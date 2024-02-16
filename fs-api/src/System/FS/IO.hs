@@ -9,6 +9,7 @@ import           Control.Concurrent.MVar
 import qualified Control.Exception as E
 import           Control.Monad.IO.Class (MonadIO (..))
 import qualified Data.ByteString.Unsafe as BS
+import qualified Data.ByteString.Builder as BS.Builder
 import qualified Data.Set as Set
 import           Foreign (castPtr)
 import           GHC.Stack
@@ -53,6 +54,14 @@ ioHasFS mount = HasFS {
     , hPutSome = \(Handle h fp) bs -> liftIO $ rethrowFsError fp $ do
         BS.unsafeUseAsCStringLen bs $ \(ptr, len) ->
             fromIntegral <$> F.write h (castPtr ptr) (fromIntegral len)
+    , hPutBuilder = \(Handle hRaw fp) builder -> liftIO $ rethrowFsError fp $
+          H.withOpenHandle "hPutBuilder" hRaw $ \osHandle -> do
+              E.bracket
+                  (F.toGHCHandle osHandle)
+                  (F.closeGHCHandle)
+                  (\ghcIOHandle ->
+                     BS.Builder.hPutBuilder ghcIOHandle builder
+                  )
     , createDirectory = \fp -> liftIO $ rethrowFsError fp $
         Dir.createDirectory (root fp)
     , listDirectory = \fp -> liftIO $ rethrowFsError fp $

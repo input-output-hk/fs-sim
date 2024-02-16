@@ -32,6 +32,7 @@ pureHasFS = HasFS {
     , hGetSome                 = Mock.hGetSome
     , hGetSomeAt               = Mock.hGetSomeAt
     , hPutSome                 = Mock.hPutSome
+    , hPutBuilder              = Mock.hPutBuilder
     , hTruncate                = Mock.hTruncate
     , hGetSize                 = Mock.hGetSize
     , createDirectory          = Mock.createDirectory

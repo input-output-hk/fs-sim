@@ -79,6 +79,8 @@ import           System.IO.Temp (withTempDirectory)
 import           System.Random (getStdRandom, randomR)
 import           Text.Read (readMaybe)
 import           Text.Show.Pretty (ppShow)
+import           Data.ByteString.Builder (Builder)
+import qualified Data.ByteString.Builder as Builder
 
 import           Test.QuickCheck
 import qualified Test.QuickCheck.Monadic as QC
@@ -146,6 +148,7 @@ data Cmd fp h =
   | Get                h Word64
   | GetAt              h Word64 AbsOffset
   | Put                h ByteString
+  | PutBuilder         h Builder
   | Truncate           h Word64
   | GetSize            h
   | CreateDir          (PathExpr fp)
@@ -197,6 +200,7 @@ run hasFS@HasFS{..} = go
     go (Get      h n           ) = ByteString <$> hGetSomeChecked hasFS h n
     go (GetAt    h n o         ) = ByteString <$> hGetSomeAtChecked hasFS h n o
     go (Put      h bs          ) = Word64     <$> hPutSomeChecked hasFS h bs
+    go (PutBuilder h builder   ) = Unit       <$> hPutBuilder h builder
     go (Truncate h sz          ) = Unit       <$> hTruncate h sz
     go (GetSize  h             ) = Word64     <$> hGetSize  h
     go (ListDirectory      pe  ) = withPE  pe      (const Strings) $ listDirectory
@@ -503,6 +507,7 @@ generator Model{..} = oneof $ concat [
         , fmap At $ Get      <$> genHandle <*> (getSmall <$> arbitrary)
         , fmap At $ GetAt    <$> genHandle <*> (getSmall <$> arbitrary) <*> arbitrary
         , fmap At $ Put      <$> genHandle <*> (BS.pack <$> arbitrary)
+        , fmap At $ PutBuilder <$> genHandle <*> (Builder.byteString . BS.pack <$> arbitrary)
         , fmap At $ Truncate <$> genHandle <*> (getSmall . getNonNegative <$> arbitrary)
         , fmap At $ GetSize  <$> genHandle
         ]
@@ -632,6 +637,7 @@ shrinker Model{..} (At cmd) =
         [GetAt h n o' | o' <- shrink o] <>
         [GetAt h n' o | n' <- shrink n]
       Put      h bs  -> At . Put      h <$> shrinkBytes bs
+      PutBuilder h builder  -> At . PutBuilder h . Builder.byteString  <$> shrinkBytes (BS.toStrict $ Builder.toLazyByteString builder)
       Truncate h n   -> At . Truncate h <$> shrink n
 
       _otherwise ->
@@ -1516,6 +1522,7 @@ instance (Condense fp, Condense h) => Condense (Cmd fp h) where
       go (Get h n)                 = ["get", condense h, condense n]
       go (GetAt h n o)             = ["getAt", condense h, condense n, condense o]
       go (Put h bs)                = ["put", condense h, condense bs]
+      go (PutBuilder h builder)    = ["put", condense h, condense (Builder.toLazyByteString builder)]
       go (Truncate h sz)           = ["truncate", condense h, condense sz]
       go (GetSize h)               = ["getSize", condense h]
       go (CreateDir fp)            = ["createDir", condense fp]

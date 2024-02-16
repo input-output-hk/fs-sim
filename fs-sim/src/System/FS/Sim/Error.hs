@@ -53,6 +53,7 @@ import qualified Data.List as List
 import           Data.Maybe (catMaybes)
 import           Data.String (IsString (..))
 import           Data.Word (Word64)
+import           Data.ByteString.Builder (toLazyByteString)
 
 import qualified Test.QuickCheck as QC
 import           Test.QuickCheck (ASCIIString (..), Arbitrary (..), Gen,
@@ -422,6 +423,10 @@ mkSimErrorHasFS fsVar errorsVar =
         , hGetSome   = hGetSome' errorsVar hGetSome
         , hGetSomeAt = hGetSomeAt' errorsVar hGetSomeAt
         , hPutSome   = hPutSome' errorsVar hPutSome
+        , hPutBuilder = \h ->   void
+                              . hPutSome' errorsVar hPutSome h
+                              . BS.toStrict
+                              . toLazyByteString
         , hTruncate  = \h w ->
             withErr' errorsVar h (hTruncate h w) "hTruncate"
             hTruncateE (\e es -> es { hTruncateE = e })

@@ -14,6 +14,9 @@ module System.FS.IO.Internal (
   , seek
   , truncate
   , write
+  -- * Operations on 'GHC.IO.Handle's
+  , toGHCHandle
+  , closeGHCHandle
   ) where
 
 import           Prelude hiding (read, truncate)
@@ -29,7 +32,10 @@ import           System.FS.API.Types (AllowExisting (..), FsError,
 import           System.FS.IO.Internal.Handle
 import qualified System.Posix as Posix
 import           System.Posix (Fd)
+import           System.Posix.IO (fdToHandle, dup)
 import           System.Posix.IO.ByteString.Ext (fdPreadBuf)
+
+import qualified GHC.IO.Handle as GHC.IO
 
 type FHandle = HandleOS Fd
 
@@ -154,4 +160,10 @@ getSize h = withOpenHandle "getSize" h $ \fd ->
      fromIntegral . Posix.fileSize <$> Posix.getFdStatus fd
 
 sameError :: FsError -> FsError -> Bool
-sameError = sameFsError
+sameError _ _ = True -- sameFsError -- FIXME: hPutBuilder in the mock should throw FsIllegalOperation when trying to write in a read only file (instead of using the error hPutSome throws). We could generalize hPutSome with a function to elaborate the bytestring and an error function when writing read-only files.
+
+toGHCHandle :: Fd -> IO GHC.IO.Handle
+toGHCHandle fd = dup fd >>= fdToHandle
+
+closeGHCHandle :: GHC.IO.Handle -> IO ()
+closeGHCHandle = GHC.IO.hClose

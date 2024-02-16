@@ -33,6 +33,7 @@ module System.FS.Sim.MockFS (
   , hIsOpen
   , hOpen
   , hPutSome
+  , hPutBuilder
   , hSeek
   , hTruncate
     -- * Operations on directories
@@ -73,6 +74,7 @@ import qualified Data.Set as S
 import qualified Data.Text as Text
 import           Data.Word (Word64)
 import           GHC.Generics (Generic)
+import           Data.ByteString.Builder (Builder, toLazyByteString)
 
 import           System.FS.API.Types
 import           Util.CallStack
@@ -639,6 +641,13 @@ hPutSome h toWrite =
       where
         (a, bc) = BS.splitAt n bs
         c       = BS.drop m bc
+
+-- | We use 'hPutBuilder' in 'IO' to avoid allocation of 'ByteString's
+-- that will put pressure on the garbage collector. For a mocked file
+-- system we do not care about the performance aspect, so we implement
+-- this function in terms of 'hPutSome'.
+hPutBuilder :: CanSimFS m => Handle' -> Builder -> m ()
+hPutBuilder h = void . hPutSome h . BS.toStrict . toLazyByteString
 
 -- | Truncate a file
 --

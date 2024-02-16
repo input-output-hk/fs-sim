@@ -21,6 +21,7 @@ module System.FS.API (
 
 import           Control.Monad.Class.MonadThrow
 import qualified Data.ByteString as BS
+import           Data.ByteString.Builder (Builder)
 import           Data.Int (Int64)
 import           Data.Set (Set)
 import           Data.Word
@@ -93,6 +94,15 @@ data HasFS m h = HasFS {
     -- Postcondition: the return value @n@ is @n > 0@ and @n <= l@, unless the
     -- given bytestring is empty, in which case @n@ can be 0.
   , hPutSome                 :: HasCallStack => Handle h -> BS.ByteString -> m Word64
+
+
+    -- | Output a 'Builder' to a 'Handle'.
+    --
+    -- This is generalization of function
+    -- 'Data.ByteString.Builder.hPutBuilder'. See said function for
+    -- more details.
+    --
+  , hPutBuilder              :: HasCallStack => Handle h -> Builder -> m ()
 
     -- | Truncate the file to the specified size
     --
