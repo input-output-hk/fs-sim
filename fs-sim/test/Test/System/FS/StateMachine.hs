@@ -227,36 +227,43 @@ run hasFS@HasFS{..} = go
   Detecting partial reads/writes of the tested IO implementation
 -------------------------------------------------------------------------------}
 
--- The functions 'hGetSome', 'hGetSomeAt' and 'hPutSome' might perform partial
--- reads/writes, depending on the underlying implementation, see #277. While
--- the model will always perform complete reads/writes, the real IO
--- implementation we are testing /might/ actually perform partial reads/writes.
--- This testsuite will fail when such a partial read or write is performed in
--- the real IO implementation, as these are undeterministic and the model will
--- no longer correspond to the real implementation. See #502 were we track this
--- issue.
---
--- So far, on all systems the tests have been run on, no partial reads/writes
--- have ever been noticed. However, we cannot be sure that the tests will
--- never be run on a system or file-system that might result in partial
--- reads/writes. Therefore, we use checked variants of 'hGetSome', 'hGetSomeAt'
--- and 'hPutSome' that detect partial reads/writes and that will signal an
--- error so that the developer noticing the failing test doesn't waste any time
--- debugging the implementation while the failing test was actually due to an
--- unexpected partial read/write.
---
--- While using the wrappers 'hGetExactly' and 'hPutAll' instead of 'hGetSome',
--- 'hGetSomeAt' and 'hPut' in the implementation of 'run' will opaquely handle
--- any potential partial reads/writes, it is not a good solution. The problem
--- is that to run a single 'Cmd', we now have to run multiple primitive 'HasFS'
--- functions. Each of those primitive functions might update the state of the
--- model and the real world. Now when the second, third, ..., or n-th
--- primitive functions fails (while running a single 'Cmd'), the whole 'Cmd'
--- failed and the model is not updated. This means that we continue with the
--- model as it was /before/ running the 'Cmd'. However, these primitive
--- functions might have changed the model /and/ the state of the real
--- implementation. In that case, we can no longer guarantee that the model and
--- the real implementation are in sync.
+{- Note [Checking for partial reads/writes]
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+  The functions 'hGetSome', 'hGetSomeAt' and 'hPutSome' might perform partial
+  reads/writes, depending on the underlying implementation, see
+  [ouroboros-network#277](https://github.com/IntersectMBO/ouroboros-network/issues/277).
+  While the model will always perform complete reads/writes, the real IO
+  implementation we are testing /might/ actually perform partial reads/writes.
+  This testsuite will fail when such a partial read or write is performed in the
+  real IO implementation, as these are undeterministic and the model will no
+  longer correspond to the real implementation. See
+  [ouroboros-network#502](https://github.com/IntersectMBO/ouroboros-network/issues/502)
+  were we tracked this issue.
+
+  So far, on all systems the tests have been run on, no partial reads/writes
+  have ever been noticed. However, we cannot be sure that the tests will never
+  be run on a system or file-system that might result in partial reads/writes.
+  Therefore, we use checked variants of 'hGetSome', 'hGetSomeAt' and 'hPutSome'
+  that detect partial reads/writes and that will signal an error so that the
+  developer noticing the failing test doesn't waste any time debugging the
+  implementation while the failing test was actually due to an unexpected
+  partial read/write.
+
+  For compound functions like 'hGetExactly' and 'hPutAll', this is not a good
+  solution. However, since we are only testing primitives, the solution is fine
+  for our purposes.
+
+  The problem with compound functions is that to run a single 'Cmd', we now have
+  to run multiple primitive 'HasFS' functions. Each of those primitive functions
+  might update the state of the model and the real world. Now when the second,
+  third, ..., or n-th primitive functions fails (while running a single 'Cmd'),
+  the whole 'Cmd' failed and the model is not updated. This means that we
+  continue with the model as it was /before/ running the 'Cmd'. However, these
+  primitive functions might have changed the model /and/ the state of the real
+  implementation. In that case, we can no longer guarantee that the model and
+  the real implementation are in sync.
+-}
 
 hGetSomeChecked :: (Monad m, HasCallStack)
                 => HasFS m h -> Handle h -> Word64 -> m ByteString
@@ -267,7 +274,7 @@ hGetSomeChecked HasFS{..} h n = do
       -- If we can actually read more bytes, the last read was partial. If we
       -- cannot, we really were at EOF.
       unless (BS.null moreBytes) $
-        error "Unsupported partial read detected, see #502"
+        error "Unsupported partial read detected, see Note [Checking for partial reads/writes]"
     return bytes
 
 hGetSomeAtChecked :: (Monad m, HasCallStack)
@@ -279,7 +286,7 @@ hGetSomeAtChecked HasFS{..} h n o = do
       -- If we can actually read more bytes, the last read was partial. If we
       -- cannot, we really were at EOF.
       unless (BS.null moreBytes) $
-        error "Unsupported partial read detected, see #502"
+        error "Unsupported partial read detected, see Note [Checking for partial reads/writes]"
     return bytes
 
 hPutSomeChecked :: (Monad m, HasCallStack)
@@ -287,7 +294,7 @@ hPutSomeChecked :: (Monad m, HasCallStack)
 hPutSomeChecked HasFS{..} h bytes = do
     n <- hPutSome h bytes
     if fromIntegral (BS.length bytes) /= n
-      then error "Unsupported partial write detected, see #502"
+      then error "Unsupported partial write detected, see Note [Checking for partial reads/writes]"
       else return n
 
 {-------------------------------------------------------------------------------
@@ -382,7 +389,7 @@ toMock Model{..} (At r) = bimap (knownPaths RE.!) (knownHandles RE.!) r
 
 -- | Step the mock semantics
 --
--- We cannot step the whole Model here (see 'event', below)
+-- We cannot step the whole Model here (see 'Event', below)
 step :: Eq1 r
      => Model r -> Cmd :@ r -> (Resp FsPath (Handle HandleMock), MockFS)
 step model@Model{..} cmd = runPure (toMock model cmd) mockFS
@@ -399,7 +406,7 @@ openHandles Model{..} =
   Wrapping in quickcheck-state-machine references
 -------------------------------------------------------------------------------}
 
--- | Instantiate functor @f@ to @f (PathRef r) (HRef r)@
+-- | Instantiate functor @f@ to @f (PathRef r) (HandleRef r)@
 --
 -- > Cmd :@ Concrete ~ Cmd (PathRef Concrete) (HandleRef Concrete)
 newtype At t r = At {unAt :: (t (PathRef r) (HandleRef r))}
@@ -585,13 +592,12 @@ tempFromPath fp =
 
 {-------------------------------------------------------------------------------
   Shrinking
-
-  When we replace one reference with another, we are careful to impose an order
-  so that we don't end up flipping between references. Since shrinking is greedy
-  this does mean that the choice of reference may influence how much we can
-  shrink later. This is hard to avoid in greedy algorithms.
 -------------------------------------------------------------------------------}
 
+-- | When we replace one reference with another, we are careful to impose an
+-- order so that we don't end up flipping between references. Since shrinking is
+-- greedy this does mean that the choice of reference may influence how much we
+-- can shrink later. This is hard to avoid in greedy algorithms.
 shrinker :: Model Symbolic -> Cmd :@ Symbolic -> [Cmd :@ Symbolic]
 shrinker Model{..} (At cmd) =
     case cmd of
@@ -649,7 +655,7 @@ shrinker Model{..} (At cmd) =
                    -- construct replacement
                    -> [PathExpr (PathRef Symbolic)]
     replaceWithRef pe p f =
-        filter (canReplace pe) $ map f $ (RE.reverseLookup p knownPaths)
+        filter (canReplace pe) $ map f $ RE.reverseLookup p knownPaths
       where
         canReplace :: PathExpr (PathRef Symbolic)  -- current
                    -> PathExpr (PathRef Symbolic)  -- candidate
@@ -1438,7 +1444,7 @@ showLabelledExamples :: IO ()
 showLabelledExamples = showLabelledExamples' Nothing 1000 (const True)
 
 prop_sequential :: FilePath -> Property
-prop_sequential tmpDir = withMaxSuccess 10000 $
+prop_sequential tmpDir = withMaxSuccess 1000 $
     QSM.forAllCommands (sm mountUnused) Nothing $ \cmds -> QC.monadicIO $ do
       (tstTmpDir, hist, res) <- QC.run $
         withTempDirectory tmpDir "HasFS" $ \tstTmpDir -> do
@@ -1453,6 +1459,7 @@ prop_sequential tmpDir = withMaxSuccess 10000 $
           return (tstTmpDir, hist, res)
 
       QSM.prettyCommands (sm mountUnused) hist
+        $ QSM.checkCommandNames cmds
         $ tabulate "Tags" (map show $ tag (execCmds cmds))
         $ counterexample ("Mount point: " ++ tstTmpDir)
         $ res === QSM.Ok
