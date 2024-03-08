@@ -34,6 +34,7 @@ module System.FS.Sim.MockFS (
   , hOpen
   , hPutSome
   , hSeek
+  , hTell
   , hTruncate
     -- * Operations on directories
   , createDirectory
@@ -120,7 +121,7 @@ data OpenHandleState = OpenHandle {
 isWriteHandle :: OpenHandleState -> Bool
 isWriteHandle OpenHandle{..} = case openPtr of
     RW _ True  _ -> True
-    Append       -> True
+    Append _     -> True
     _            -> False
 
 -- | File pointer
@@ -134,8 +135,10 @@ data FilePtr =
 
     -- | Append-only pointer
     --
-    -- Offset is always the end of the file in append mode
-  | Append
+    -- Offset is always the end of the file in append mode, with two exceptions
+    -- that are explained in the note on 'System.FS.API.hTell'. In these two
+    -- exception cases, the offset is /ambiguous/ (i.e., 'Nothing').
+  | Append !(Maybe Word64)
   deriving (Show, Generic)
 
 data ClosedHandleState = ClosedHandle {
@@ -229,7 +232,7 @@ seekFilePtr MockFS{..} (Handle h _) seekMode o = do
             when (o' > fsize) $ throwError (errNegative openFilePath)
             let cur' = fsize - o'
             return $ RW r w cur'
-          (Append, _, _) ->
+          (Append _, _, _) ->
             throwError (errAppend openFilePath)
   where
     errPastEnd fp  = FsError {
@@ -465,6 +468,7 @@ hOpen fp openMode = do
       , fsErrorStack  = prettyCallStack
       , fsLimitation  = True
       }
+    fileExists <- doesFileExist fp
     modifyMockFS $ \fs -> do
       let alreadyHasWriter =
             any (\hs -> openFilePath hs == fp && isWriteHandle hs) $
@@ -482,16 +486,18 @@ hOpen fp openMode = do
         checkFsTree $ FS.getFile fp (mockFiles fs)
       files' <- checkFsTree $ FS.openFile fp ex (mockFiles fs)
       return $ newHandle (fs { mockFiles = files' })
-                         (OpenHandle fp (filePtr openMode))
+                         (OpenHandle fp (filePtr openMode fileExists))
   where
     ex :: AllowExisting
     ex = allowExisting openMode
 
-    filePtr :: OpenMode -> FilePtr
-    filePtr ReadMode          = RW True  False 0
-    filePtr (WriteMode     _) = RW False True  0
-    filePtr (ReadWriteMode _) = RW True  True  0
-    filePtr (AppendMode    _) = Append
+    filePtr :: OpenMode -> Bool -> FilePtr
+    filePtr ReadMode            _          = RW True  False 0
+    filePtr (WriteMode     _  ) _          = RW False True  0
+    filePtr (ReadWriteMode _  ) _          = RW True  True  0
+    filePtr (AppendMode    aex) fileExists
+      | aex == AllowExisting && fileExists = Append Nothing
+      | otherwise                          = Append (Just 0)
 
 -- | Mock implementation of 'hClose'
 hClose :: CanSimFS m => Handle' -> m ()
@@ -520,6 +526,25 @@ hSeek h seekMode o = withOpenHandleRead h $ \fs hs -> do
     openPtr' <- seekFilePtr fs h seekMode o
     return ((), hs { openPtr = openPtr' })
 
+-- | Get the current offset stored in the file handle
+hTell :: CanSimFS m => Handle' -> m AbsOffset
+hTell h = withOpenHandleRead h $ \_ hs@OpenHandle{..} -> do
+    case openPtr of
+      RW _ _ off -> pure (AbsOffset off, hs)
+      Append offM -> do
+        case offM of
+          Nothing  -> throwError (errOffsetUnkown openFilePath)
+          Just off -> pure (AbsOffset off, hs)
+  where
+    errOffsetUnkown fp = FsError {
+        fsErrorType   = FsInvalidArgument
+      , fsErrorPath   = fsToFsErrorPathUnmounted fp
+      , fsErrorString = "hTell: offset is ambiguous" -- See 'Append'
+      , fsErrorNo     = Nothing
+      , fsErrorStack  = prettyCallStack
+      , fsLimitation  = True
+      }
+
 -- | Get bytes from handle
 --
 -- NOTE: Unlike real I/O, we disallow 'hGetSome' on a handle in append mode.
@@ -532,7 +557,7 @@ hGetSome h n =
           unless r $ throwError (errNoReadAccess openFilePath "write")
           let bs = BS.take (fromIntegral n) . BS.drop (fromIntegral o) $ file
           return (bs, hs { openPtr = RW True w (o + fromIntegral (BS.length bs)) })
-        Append -> throwError (errNoReadAccess openFilePath "append")
+        Append _ -> throwError (errNoReadAccess openFilePath "append")
   where
     errNoReadAccess fp mode = FsError {
         fsErrorType   = FsInvalidArgument
@@ -563,7 +588,7 @@ hGetSomeAt h n o =
           -- EOF, in AbsoluteSeek mode.
           when (o' > fsize) $ throwError (errPastEnd openFilePath)
           return (bs, hs)
-        Append -> throwError (errNoReadAccess openFilePath "append")
+        Append _ -> throwError (errNoReadAccess openFilePath "append")
   where
     errNoReadAccess fp mode = FsError {
         fsErrorType   = FsInvalidArgument
@@ -593,11 +618,15 @@ hPutSome h toWrite =
           let file' = replace o toWrite file
           files' <- checkFsTree $ FS.replace openFilePath file' (mockFiles fs)
           return (written, (files', hs { openPtr = RW r w (o + written) }))
-        Append -> do
+        Append o -> do
           file <- checkFsTree $ FS.getFile openFilePath (mockFiles fs)
           let file' = file <> toWrite
           files' <- checkFsTree $ FS.replace openFilePath file' (mockFiles fs)
-          return (written, (files', hs))
+          -- only update the offset when we're writing >0 bytes to it
+          let o' = if BS.length toWrite == 0
+                      then o
+                      else Just (fromIntegral (BS.length file'))
+          return (written, (files', hs { openPtr = Append o' }))
   where
     written = toEnum $ BS.length toWrite
 
@@ -674,8 +703,8 @@ hTruncate h sz =
                     , fsErrorStack  = prettyCallStack
                     , fsLimitation  = True
                     }
-                (False, Append) ->
-                  return Append
+                (False, Append _) ->
+                  return (Append Nothing)
       let file' = BS.take (fromIntegral sz) file
       files' <- checkFsTree $ FS.replace openFilePath file' (mockFiles fs)
       -- TODO: Don't replace the file pointer (not changed)

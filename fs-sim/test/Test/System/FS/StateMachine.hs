@@ -89,7 +89,7 @@ import qualified Test.StateMachine.Labelling as C
 import qualified Test.StateMachine.Sequential as QSM
 import qualified Test.StateMachine.Types as QSM
 import qualified Test.StateMachine.Types.Rank2 as Rank2
-import           Test.Tasty (TestTree, testGroup)
+import           Test.Tasty (TestTree, localOption, testGroup)
 import           Test.Tasty.QuickCheck
 
 import           System.FS.API
@@ -143,6 +143,7 @@ data Cmd fp h =
   | Close              h
   | IsOpen             h
   | Seek               h SeekMode Int64
+  | Tell               h
   | Get                h Word64
   | GetAt              h Word64 AbsOffset
   | Put                h ByteString
@@ -171,6 +172,7 @@ data Success fp h =
   | ByteString ByteString
   | Strings    (Set String)
   | Bool       Bool
+  | Offset     AbsOffset
   deriving (Eq, Show, Functor, Foldable)
 
 -- | Successful semantics
@@ -191,6 +193,7 @@ run hasFS@HasFS{..} = go
     go (IsOpen   h             ) = Bool       <$> hIsOpen   h
     go (Close    h             ) = Unit       <$> hClose    h
     go (Seek     h mode sz     ) = Unit       <$> hSeek     h mode sz
+    go (Tell     h             ) = Offset     <$> hTell     h
     -- Note: we're not using 'hGetSome', 'hGetSomeAt' and 'hPutSome' that may
     -- produce partial reads/writes, but wrappers around them that handle
     -- partial reads/writes, see #502.
@@ -500,6 +503,7 @@ generator Model{..} = oneof $ concat [
           fmap At $ Close    <$> genHandle
         , fmap At $ IsOpen   <$> genHandle
         , fmap At $ Seek     <$> genHandle <*> genSeekMode <*> genOffset
+        , fmap At $ Tell     <$> genHandle
         , fmap At $ Get      <$> genHandle <*> (getSmall <$> arbitrary)
         , fmap At $ GetAt    <$> genHandle <*> (getSmall <$> arbitrary) <*> arbitrary
         , fmap At $ Put      <$> genHandle <*> (BS.pack <$> arbitrary)
@@ -811,10 +815,16 @@ data Tag =
   -- > Put h1
   | TagWrite
 
-  -- | Seek from end of a file
+  -- | Seek with a mode
   --
-  -- > Seek h IO.SeekFromEnd n (n<0)
-  | TagSeekFromEnd
+  -- > Seek h ... n (n<0)
+  | TagSeekWithMode SeekMode
+
+  -- | Seek an absolute offset and then tell should return the same offset
+  --
+  -- > Seek h ... n
+  -- > Tell h ...
+  | TagSeekTellWithMode SeekMode
 
   -- | Create a directory
   --
@@ -959,7 +969,8 @@ tag = C.classify [
     , tagWriteWriteRead Map.empty
     , tagOpenDirectory Set.empty
     , tagWrite
-    , tagSeekFromEnd
+    , tagSeekWithMode
+    , tagSeekTellWithMode Map.empty
     , tagCreateDirectory
     , tagDoesFileExistOK
     , tagDoesFileExistKO
@@ -1183,11 +1194,27 @@ tag = C.classify [
           Left TagWrite
         _otherwise -> Right tagWrite
 
-    tagSeekFromEnd :: EventPred
-    tagSeekFromEnd = successful $ \ev _ ->
+    tagSeekWithMode :: EventPred
+    tagSeekWithMode = successful $ \ev _ ->
       case eventMockCmd ev of
-        Seek _ SeekFromEnd n | n < 0 -> Left TagSeekFromEnd
-        _otherwise                   -> Right tagSeekFromEnd
+        Seek _ m n  |  (m == AbsoluteSeek && n > 0)
+                    || (m == SeekFromEnd && n < 0)
+                    || n /= 0 ->
+          Left (TagSeekWithMode m)
+        _otherwise ->
+          Right tagSeekWithMode
+
+    tagSeekTellWithMode :: Map HandleMock SeekMode -> EventPred
+    tagSeekTellWithMode seek = successful $ \ev _suc ->
+      case eventMockCmd ev of
+        Seek (Handle h _) m n |  (m == AbsoluteSeek && n > 0)
+                              || (m == SeekFromEnd && n < 0)
+                              || n /= 0 ->
+          Right $ tagSeekTellWithMode (Map.insert h m seek)
+        Tell (Handle h _) | Just m <- Map.lookup h seek ->
+          Left (TagSeekTellWithMode m)
+        _otherwise ->
+          Right $ tagSeekTellWithMode seek
 
     tagCreateDirectory :: EventPred
     tagCreateDirectory = successful $ \ev _ ->
@@ -1438,7 +1465,7 @@ showLabelledExamples :: IO ()
 showLabelledExamples = showLabelledExamples' Nothing 1000 (const True)
 
 prop_sequential :: FilePath -> Property
-prop_sequential tmpDir = withMaxSuccess 10000 $
+prop_sequential tmpDir =
     QSM.forAllCommands (sm mountUnused) Nothing $ \cmds -> QC.monadicIO $ do
       (tstTmpDir, hist, res) <- QC.run $
         withTempDirectory tmpDir "HasFS" $ \tstTmpDir -> do
@@ -1453,13 +1480,16 @@ prop_sequential tmpDir = withMaxSuccess 10000 $
           return (tstTmpDir, hist, res)
 
       QSM.prettyCommands (sm mountUnused) hist
+        $ QSM.checkCommandNames cmds
         $ tabulate "Tags" (map show $ tag (execCmds cmds))
         $ counterexample ("Mount point: " ++ tstTmpDir)
         $ res === QSM.Ok
 
 tests :: FilePath -> TestTree
 tests tmpDir = testGroup "HasFS" [
-      testProperty "q-s-m" $ prop_sequential tmpDir
+      localOption (QuickCheckTests 10000)
+    $ localOption (QuickCheckMaxSize 500)
+    $ testProperty "q-s-m" $ prop_sequential tmpDir
     ]
 
 -- | Unused mount mount
@@ -1513,6 +1543,7 @@ instance (Condense fp, Condense h) => Condense (Cmd fp h) where
       go (Close h)                 = ["close", condense h]
       go (IsOpen h)                = ["isOpen", condense h]
       go (Seek h mode o)           = ["seek", condense h, condense mode, condense o]
+      go (Tell h)                  = ["tell", condense h]
       go (Get h n)                 = ["get", condense h, condense n]
       go (GetAt h n o)             = ["getAt", condense h, condense n, condense o]
       go (Put h bs)                = ["put", condense h, condense bs]

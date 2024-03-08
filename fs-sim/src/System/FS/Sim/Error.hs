@@ -211,6 +211,7 @@ data Errors = Errors
   , hOpenE                    :: ErrorStream
   , hCloseE                   :: ErrorStream
   , hSeekE                    :: ErrorStream
+  , hTellE                    :: ErrorStream
   , hGetSomeE                 :: ErrorStreamGetSome
   , hGetSomeAtE               :: ErrorStreamGetSome
   , hPutSomeE                 :: ErrorStreamPutSome
@@ -230,28 +231,74 @@ data Errors = Errors
 
 -- | Return 'True' if all streams are empty ('null').
 allNull :: Errors -> Bool
-allNull Errors {..} = Stream.null dumpStateE
-                   && Stream.null hOpenE
-                   && Stream.null hCloseE
-                   && Stream.null hSeekE
-                   && Stream.null hGetSomeE
-                   && Stream.null hGetSomeAtE
-                   && Stream.null hPutSomeE
-                   && Stream.null hTruncateE
-                   && Stream.null hGetSizeE
-                   && Stream.null createDirectoryE
-                   && Stream.null createDirectoryIfMissingE
-                   && Stream.null listDirectoryE
-                   && Stream.null doesDirectoryExistE
-                   && Stream.null doesFileExistE
-                   && Stream.null removeFileE
-                   && Stream.null renameFileE
-
+allNull errs =
+       Stream.null dumpStateE
+    && Stream.null hOpenE
+    && Stream.null hCloseE
+    && Stream.null hSeekE
+    && Stream.null hTellE
+    && Stream.null hGetSomeE
+    && Stream.null hGetSomeAtE
+    && Stream.null hPutSomeE
+    && Stream.null hTruncateE
+    && Stream.null hGetSizeE
+    && Stream.null createDirectoryE
+    && Stream.null createDirectoryIfMissingE
+    && Stream.null listDirectoryE
+    && Stream.null doesDirectoryExistE
+    && Stream.null doesFileExistE
+    && Stream.null removeDirectoryRecursiveE
+    && Stream.null removeFileE
+    && Stream.null renameFileE
+  where
+      -- a (non-record) pattern match ensures that we are not missing any fields
+    Errors
+      dumpStateE
+      hOpenE
+      hCloseE
+      hSeekE
+      hTellE
+      hGetSomeE
+      hGetSomeAtE
+      hPutSomeE
+      hTruncateE
+      hGetSizeE
+      createDirectoryE
+      createDirectoryIfMissingE
+      listDirectoryE
+      doesDirectoryExistE
+      doesFileExistE
+      removeDirectoryRecursiveE
+      removeFileE
+      renameFileE
+      = errs
 
 instance Show Errors where
-  show Errors {..} =
+  show errs =
       "Errors {"  <> intercalate ", " streams <> "}"
     where
+      -- a (non-record) pattern match ensures that we are not missing any fields
+      Errors
+        dumpStateE
+        hOpenE
+        hCloseE
+        hSeekE
+        hTellE
+        hGetSomeE
+        hGetSomeAtE
+        hPutSomeE
+        hTruncateE
+        hGetSizeE
+        createDirectoryE
+        createDirectoryIfMissingE
+        listDirectoryE
+        doesDirectoryExistE
+        doesFileExistE
+        removeDirectoryRecursiveE
+        removeFileE
+        renameFileE
+        = errs
+
       -- | Show a stream unless it is empty
       s :: Show a => String -> Stream a -> Maybe String
       s fld str | Stream.null str = Nothing
@@ -263,6 +310,7 @@ instance Show Errors where
         , s "hOpenE"                    hOpenE
         , s "hCloseE"                   hCloseE
         , s "hSeekE"                    hSeekE
+        , s "hTellE"                    hTellE
         , s "hGetSomeE"                 hGetSomeE
         , s "hGetSomeAtE"               hGetSomeAtE
         , s "hPutSomeE"                 hPutSomeE
@@ -273,6 +321,7 @@ instance Show Errors where
         , s "listDirectoryE"            listDirectoryE
         , s "doesDirectoryExistE"       doesDirectoryExistE
         , s "doesFileExistE"            doesFileExistE
+        , s "removeDirectyRecursiveE"   removeDirectoryRecursiveE
         , s "removeFileE"               removeFileE
         , s "renameFileE"               renameFileE
         ]
@@ -288,6 +337,7 @@ simpleErrors es = Errors
     , hOpenE                    = es
     , hCloseE                   = es
     , hSeekE                    = es
+    , hTellE                    = es
     , hGetSomeE                 =  Left                <$> es
     , hGetSomeAtE               =  Left                <$> es
     , hPutSomeE                 = (Left . (, Nothing)) <$> es
@@ -327,6 +377,7 @@ genErrors genPartialWrites genSubstituteWithJunk = do
       , FsResourceAlreadyInUse, FsResourceAlreadyExist
       , FsInsufficientPermissions, FsTooManyOpenFiles ]
     hSeekE      <- streamGen 3 [ FsReachedEOF ]
+    hTellE      <- streamGen 3 [ FsIllegalOperation ]
     hGetSomeE   <- streamGen' 20
       [ (1, return $ Left FsReachedEOF)
       , (3, Right <$> arbitrary) ]
@@ -365,11 +416,12 @@ genErrors genPartialWrites genSubstituteWithJunk = do
 instance Arbitrary Errors where
   arbitrary = genErrors True True
 
-  shrink err@Errors {..} = filter (not . allNull) $ concat
+  shrink err = filter (not . allNull) $ concat
       [ (\s' -> err { dumpStateE = s' })                <$> Stream.shrinkStream dumpStateE
       , (\s' -> err { hOpenE = s' })                    <$> Stream.shrinkStream hOpenE
       , (\s' -> err { hCloseE = s' })                   <$> Stream.shrinkStream hCloseE
       , (\s' -> err { hSeekE = s' })                    <$> Stream.shrinkStream hSeekE
+      , (\s' -> err { hTellE = s' })                    <$> Stream.shrinkStream hTellE
       , (\s' -> err { hGetSomeE = s' })                 <$> Stream.shrinkStream hGetSomeE
       , (\s' -> err { hGetSomeAtE = s' })               <$> Stream.shrinkStream hGetSomeAtE
       , (\s' -> err { hPutSomeE = s' })                 <$> Stream.shrinkStream hPutSomeE
@@ -380,9 +432,32 @@ instance Arbitrary Errors where
       , (\s' -> err { listDirectoryE = s' })            <$> Stream.shrinkStream listDirectoryE
       , (\s' -> err { doesDirectoryExistE = s' })       <$> Stream.shrinkStream doesDirectoryExistE
       , (\s' -> err { doesFileExistE = s' })            <$> Stream.shrinkStream doesFileExistE
+      , (\s' -> err { removeDirectoryRecursiveE = s' }) <$> Stream.shrinkStream removeDirectoryRecursiveE
       , (\s' -> err { removeFileE = s' })               <$> Stream.shrinkStream removeFileE
       , (\s' -> err { renameFileE = s' })               <$> Stream.shrinkStream renameFileE
       ]
+    where
+      -- a (non-record) pattern match ensures that we are not missing any fields
+      Errors
+        dumpStateE
+        hOpenE
+        hCloseE
+        hSeekE
+        hTellE
+        hGetSomeE
+        hGetSomeAtE
+        hPutSomeE
+        hTruncateE
+        hGetSizeE
+        createDirectoryE
+        createDirectoryIfMissingE
+        listDirectoryE
+        doesDirectoryExistE
+        doesFileExistE
+        removeDirectoryRecursiveE
+        removeFileE
+        renameFileE
+        = err
 
 {-------------------------------------------------------------------------------
   Simulate Errors monad
@@ -419,6 +494,9 @@ mkSimErrorHasFS fsVar errorsVar =
         , hSeek      = \h m n ->
             withErr' errorsVar h (hSeek h m n) "hSeek"
             hSeekE (\e es -> es { hSeekE = e })
+        , hTell      = \h ->
+            withErr' errorsVar h (hTell h) "hTell"
+            hTellE (\e es -> es { hTellE = e })
         , hGetSome   = hGetSome' errorsVar hGetSome
         , hGetSomeAt = hGetSomeAt' errorsVar hGetSomeAt
         , hPutSome   = hPutSome' errorsVar hPutSome
@@ -537,8 +615,7 @@ withErr' :: (MonadSTM m, MonadThrow m, HasCallStack)
          -> (Errors -> ErrorStream)           -- ^ @getter@
          -> (ErrorStream -> Errors -> Errors) -- ^ @setter@
          -> m a
-withErr' errorsVar handle action msg getter setter =
-    withErr errorsVar (handlePath handle) action msg getter setter
+withErr' errorsVar handle = withErr errorsVar (handlePath handle)
 
 -- | Execute the wrapped 'hGetSome', throw an error, or simulate a partial
 -- read, depending on the corresponding 'ErrorStreamGetSome' (see

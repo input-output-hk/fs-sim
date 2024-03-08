@@ -1,5 +1,22 @@
 # Revision history for fs-sim
 
+## next release -- ????-??-??
+
+### Breaking
+
+* Add simulation implementations (`pureHasFS`, `simHasFS` and `mkSimErrorHasFS`)
+  for the new `hTell` function in the `HasFS` interface. The simulation has two
+  known limitations regarding `hTell` because of differing behaviour between
+  Windows and Unix-based systems.
+* Add an error stream to `Errors` for `hTell`.
+
+### Patch
+
+* `allNull` was not actually checking whether all streams in the argument
+  `Errors` are empty.
+* The `Show Errors` instance was not printing every stream.
+* The shrinker for `Errors` was not shrinking every stream.
+
 ## 0.2.1.1 -- 2023-10-30
 
 ### Patch

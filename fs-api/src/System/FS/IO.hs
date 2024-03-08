@@ -50,6 +50,8 @@ ioHasFS mount = HasFS {
         F.truncate h sz
     , hGetSize = \(Handle h fp) -> liftIO $ rethrowFsError fp $
         F.getSize h
+    , hTell = \(Handle h fp) -> liftIO $ rethrowFsError fp $
+        AbsOffset <$> F.tell h
     , hPutSome = \(Handle h fp) bs -> liftIO $ rethrowFsError fp $ do
         BS.unsafeUseAsCStringLen bs $ \(ptr, len) ->
             fromIntegral <$> F.write h (castPtr ptr) (fromIntegral len)

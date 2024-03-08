@@ -11,6 +11,7 @@ module System.FS.IO.Internal (
   , read
   , sameError
   , seek
+  , tell
   , truncate
   , write
   ) where
@@ -64,6 +65,10 @@ write fh data' bytes = withOpenHandle "write" fh $ \h ->
 seek :: FHandle -> SeekMode -> Int64 -> IO ()
 seek fh seekMode size = void <$> withOpenHandle "seek" fh $ \h ->
   setFilePointerEx h size (fromSeekMode seekMode)
+
+-- | Request the absolute file offset stored in the handle
+tell :: FHandle -> IO Word64
+tell h = withOpenHandle "tell" h $ fmap fromIntegral . getCurrentFileOffset
 
 fromSeekMode :: SeekMode -> FilePtrDirection
 fromSeekMode AbsoluteSeek = fILE_BEGIN

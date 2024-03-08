@@ -1,5 +1,12 @@
 # Revision history for fs-api
 
+## next release -- ????-??-??
+
+### Breaking
+
+* Add `hTell` function to `HasFS`, which returns the absolute file offset that
+  is stored in a file handle.
+
 ## 0.2.0.1 -- 2023-10-30
 
 ### Patch

@@ -12,6 +12,7 @@ module System.FS.IO.Internal (
   , read
   , sameError
   , seek
+  , tell
   , truncate
   , write
   ) where
@@ -28,7 +29,7 @@ import           System.FS.API.Types (AllowExisting (..), FsError,
                      OpenMode (..), SeekMode (..), sameFsError)
 import           System.FS.IO.Internal.Handle
 import qualified System.Posix as Posix
-import           System.Posix (Fd)
+import           System.Posix (Fd (..))
 import           System.Posix.IO.ByteString.Ext (fdPreadBuf)
 
 type FHandle = HandleOS Fd
@@ -122,6 +123,11 @@ write h data' bytes = withOpenHandle "write" h $ \fd ->
 seek :: FHandle -> SeekMode -> Int64 -> IO ()
 seek h seekMode offset = withOpenHandle "seek" h $ \fd ->
     void $ Posix.fdSeek fd seekMode (fromIntegral offset)
+
+-- | Request the absolute file offset stored in the handle
+tell :: FHandle -> IO Word64
+tell h = withOpenHandle "tell" h $ \fd ->
+    fromIntegral <$> Posix.fdSeek fd RelativeSeek 0
 
 -- | Reads a given number of bytes from the input 'FHandle'.
 read :: FHandle -> Word64 -> IO ByteString
