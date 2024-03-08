@@ -29,6 +29,7 @@ pureHasFS = HasFS {
     , hClose                   = Mock.hClose
     , hIsOpen                  = Mock.hIsOpen
     , hSeek                    = Mock.hSeek
+    , hTell                    = Mock.hTell
     , hGetSome                 = Mock.hGetSome
     , hGetSomeAt               = Mock.hGetSomeAt
     , hPutSome                 = Mock.hPutSome

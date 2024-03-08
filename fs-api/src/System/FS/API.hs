@@ -58,6 +58,16 @@ data HasFS m h = HasFS {
     -- and we don't want to emulate it's behaviour.
   , hSeek                    :: HasCallStack => Handle h -> SeekMode -> Int64 -> m ()
 
+    -- | Return the current absolute offset into the file
+    --
+    -- NOTE: may provide different answers on Windows than on Unix-based systems
+    -- in two cases, (1) when opening a existing file in append-only mode, or
+    -- (2) right after a file has been truncated. It seems that on Windows
+    -- systems, the offset is immediately up-to-date, whereas on Unix-based
+    -- systems the file offset may not be updated until you start writing >0
+    -- bytes to the file handle.
+  , hTell                    :: HasCallStack => Handle h -> m AbsOffset
+
     -- | Try to read @n@ bytes from a handle
     --
     -- When at the end of the file, an empty bytestring will be returned.
