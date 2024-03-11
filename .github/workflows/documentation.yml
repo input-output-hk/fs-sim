@@ -42,7 +42,7 @@ jobs:
 
     - name: Setup Haskell
       id: setup-haskell
-      uses: haskell/actions/setup@v2
+      uses: haskell-actions/setup@v2
       with:
         ghc-version: ${{ env.ghc }}
         cabal-version: ${{ env.cabal }}

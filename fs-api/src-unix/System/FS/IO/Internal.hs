@@ -24,8 +24,9 @@ import qualified Data.ByteString.Internal as Internal
 import           Data.Int (Int64)
 import           Data.Word (Word32, Word64, Word8)
 import           Foreign (Ptr)
-import           System.FS.API.Types (AllowExisting (..), FsError,
-                     OpenMode (..), SeekMode (..), sameFsError)
+import           System.FS.API.Types (AllowExisting (..), OpenMode (..),
+                     SeekMode (..))
+import           System.FS.IO.Internal.Error (sameError)
 import           System.FS.IO.Internal.Handle
 import qualified System.Posix as Posix
 import           System.Posix (Fd)
@@ -152,6 +153,3 @@ close h = closeHandleOS h Posix.closeFd
 getSize :: FHandle -> IO Word64
 getSize h = withOpenHandle "getSize" h $ \fd ->
      fromIntegral . Posix.fileSize <$> Posix.getFdStatus fd
-
-sameError :: FsError -> FsError -> Bool
-sameError = sameFsError
