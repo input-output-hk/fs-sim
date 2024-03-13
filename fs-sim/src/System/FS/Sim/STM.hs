@@ -1,5 +1,6 @@
+{-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications    #-}
+{- HLINT ignore "Avoid lambda" -}
 
 -- | 'HasFS' instance using 'MockFS' stored in an STM variable
 module System.FS.Sim.STM (
@@ -46,28 +47,28 @@ simHasFS :: forall m. (MonadSTM m, MonadThrow m)
          -> HasFS m HandleMock
 simHasFS var = HasFS {
       dumpState                = sim     Mock.dumpState
-    , hOpen                    = sim  .: Mock.hOpen
-    , hClose                   = sim  .  Mock.hClose
-    , hIsOpen                  = sim  .  Mock.hIsOpen
-    , hSeek                    = sim ..: Mock.hSeek
-    , hGetSome                 = sim  .: Mock.hGetSome
-    , hGetSomeAt               = sim ..: Mock.hGetSomeAt
-    , hPutSome                 = sim  .: Mock.hPutSome
-    , hTruncate                = sim  .: Mock.hTruncate
-    , hGetSize                 = sim  .  Mock.hGetSize
-    , createDirectory          = sim  .  Mock.createDirectory
-    , createDirectoryIfMissing = sim  .: Mock.createDirectoryIfMissing
-    , listDirectory            = sim  .  Mock.listDirectory
-    , doesDirectoryExist       = sim  .  Mock.doesDirectoryExist
-    , doesFileExist            = sim  .  Mock.doesFileExist
-    , removeDirectoryRecursive = sim  .  Mock.removeDirectoryRecursive
-    , removeFile               = sim  .  Mock.removeFile
-    , renameFile               = sim  .: Mock.renameFile
+    , hOpen                    = \a b -> sim (Mock.hOpen a b)
+    , hClose                   = \a -> sim (Mock.hClose a)
+    , hIsOpen                  = \a -> sim (Mock.hIsOpen a)
+    , hSeek                    = \a b c -> sim (Mock.hSeek a b c)
+    , hGetSome                 = \a b ->  sim (Mock.hGetSome a b)
+    , hGetSomeAt               = \a b c -> sim (Mock.hGetSomeAt a b c)
+    , hPutSome                 = \a b -> sim (Mock.hPutSome a b)
+    , hTruncate                = \a b -> sim (Mock.hTruncate a b)
+    , hGetSize                 = \a -> sim  (Mock.hGetSize a)
+    , createDirectory          = \a -> sim (Mock.createDirectory a)
+    , createDirectoryIfMissing = \a b -> sim (Mock.createDirectoryIfMissing a b)
+    , listDirectory            = \a -> sim (Mock.listDirectory a)
+    , doesDirectoryExist       = \a -> sim (Mock.doesDirectoryExist a)
+    , doesFileExist            = \a -> sim (Mock.doesFileExist a)
+    , removeDirectoryRecursive = \a -> sim (Mock.removeDirectoryRecursive a)
+    , removeFile               = \a -> sim (Mock.removeFile a)
+    , renameFile               = \a b -> sim (Mock.renameFile a b)
     , mkFsErrorPath            = fsToFsErrorPathUnmounted
     , unsafeToFilePath         = \_ -> error "simHasFS:unsafeToFilePath"
     }
   where
-    sim :: PureSimFS a -> m a
+    sim :: (forall s. PureSimFS s a) -> m a
     sim m = do
       eOrA <- atomically $ do
         st <- readTVar var
@@ -77,9 +78,3 @@ simHasFS var = HasFS {
             writeTVar var st'
             return $ Right a
       either throwIO return eOrA
-
-    (.:) :: (y -> z) -> (x0 -> x1 -> y) -> (x0 -> x1 -> z)
-    (f .: g) x0 x1 = f (g x0 x1)
-
-    (..:) :: (y -> z) -> (x0 -> x1 -> x2 -> y) -> (x0 -> x1 -> x2 -> z)
-    (f ..: g) x0 x1 x2 = f (g x0 x1 x2)
