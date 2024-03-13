@@ -3,14 +3,17 @@ module System.FS.IO (
     -- * IO implementation & monad
     HandleIO
   , ioHasFS
+  , ioHasBufFS
   ) where
 
 import           Control.Concurrent.MVar
 import qualified Control.Exception as E
 import           Control.Monad.IO.Class (MonadIO (..))
+import           Control.Monad.Primitive (PrimBase)
 import qualified Data.ByteString.Unsafe as BS
+import           Data.Primitive (withMutableByteArrayContents)
 import qualified Data.Set as Set
-import           Foreign (castPtr)
+import qualified Foreign
 import           GHC.Stack
 import qualified System.Directory as Dir
 import           System.FS.API
@@ -52,7 +55,7 @@ ioHasFS mount = HasFS {
         F.getSize h
     , hPutSome = \(Handle h fp) bs -> liftIO $ rethrowFsError fp $ do
         BS.unsafeUseAsCStringLen bs $ \(ptr, len) ->
-            fromIntegral <$> F.write h (castPtr ptr) (fromIntegral len)
+            fromIntegral <$> F.write h (Foreign.castPtr ptr) (fromIntegral len)
     , createDirectory = \fp -> liftIO $ rethrowFsError fp $
         Dir.createDirectory (root fp)
     , listDirectory = \fp -> liftIO $ rethrowFsError fp $
@@ -76,18 +79,44 @@ ioHasFS mount = HasFS {
     root :: FsPath -> FilePath
     root = fsToFilePath mount
 
-    -- | Catch IO exceptions and rethrow them as 'FsError'
-    --
-    -- See comments for 'ioToFsError'
     rethrowFsError :: HasCallStack => FsPath -> IO a -> IO a
-    rethrowFsError fp action = do
-        res <- E.try action
-        case res of
-          Left err -> handleError err
-          Right a  -> return a
-      where
-        handleError :: HasCallStack => IOError -> IO a
-        handleError ioErr = E.throwIO $ ioToFsError errorPath ioErr
+    rethrowFsError = _rethrowFsError mount
 
-        errorPath :: FsErrorPath
-        errorPath = fsToFsErrorPath mount fp
+{-# INLINE _rethrowFsError #-}
+-- | Catch IO exceptions and rethrow them as 'FsError'
+--
+-- See comments for 'ioToFsError'
+_rethrowFsError :: HasCallStack => MountPoint -> FsPath -> IO a -> IO a
+_rethrowFsError mount fp action = do
+    res <- E.try action
+    case res of
+      Left err -> handleError err
+      Right a  -> return a
+  where
+    handleError :: HasCallStack => IOError -> IO a
+    handleError ioErr = E.throwIO $ ioToFsError errorPath ioErr
+
+    errorPath :: FsErrorPath
+    errorPath = fsToFsErrorPath mount fp
+
+{-------------------------------------------------------------------------------
+  HasBufFS
+-------------------------------------------------------------------------------}
+
+ioHasBufFS :: (MonadIO m, PrimBase m) => MountPoint -> HasBufFS m HandleIO
+ioHasBufFS mount = HasBufFS {
+      hGetBufSome = \(Handle h fp) buf bufOff c ->
+        withMutableByteArrayContents buf $ \ptr -> liftIO $ rethrowFsError fp $
+          F.readBuf h (ptr `Foreign.plusPtr` unBufferOffset bufOff) c
+    , hGetBufSomeAt = \(Handle h fp) buf bufOff c off ->
+        withMutableByteArrayContents buf $ \ptr -> liftIO $ rethrowFsError fp $
+          F.preadBuf h (ptr `Foreign.plusPtr` unBufferOffset bufOff) c (fromIntegral $ unAbsOffset off)
+    , hPutBufSome = \(Handle h fp) buf bufOff c ->
+        withMutableByteArrayContents buf $ \ptr -> liftIO $ rethrowFsError fp $
+          F.writeBuf h (ptr `Foreign.plusPtr` unBufferOffset bufOff) c
+    , hPutBufSomeAt = \(Handle h fp) buf bufOff c off ->
+        withMutableByteArrayContents buf $ \ptr -> liftIO $ rethrowFsError fp $
+          F.pwriteBuf h (ptr `Foreign.plusPtr` unBufferOffset bufOff) c (fromIntegral $ unAbsOffset off)
+    }
+  where
+    rethrowFsError = _rethrowFsError mount

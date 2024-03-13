@@ -2,6 +2,19 @@
 
 ## next release -- ????-??-??
 
+### Breaking
+
+* New `primitive ^>=0.9` dependency
+
+### Non-breaking
+
+* Add new `HasBufFS` interface for performing I/O using buffers. Note that it is
+  likely that this interfaced is unified with the `HasFS` interface in the
+  future.
+* Add compound functions, built from primitives in `HasBufFS`: `hGetAllAt`,
+  `hGetBufExactly`, `hPutBufExactly`, `hGetBufExactlyAt` and `hPutBufExactlyAt`
+* Provide an instantiation of the `HasBufFS` interface for `IO`.
+
 ### Patch
 
 * Make internal error comparison function more lenient on MacOS systems.

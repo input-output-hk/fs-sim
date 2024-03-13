@@ -10,7 +10,7 @@ license-files:
 
 copyright:       2019-2023 Input Output Global Inc (IOG)
 author:          IOG Engineering Team
-maintainer:      operations@iohk.io, Joris Dral
+maintainer:      operations@iohk.io, Joris Dral (joris@well-typed.com)
 category:        System
 build-type:      Simple
 extra-doc-files: CHANGELOG.md
@@ -45,6 +45,7 @@ library
     , directory   >=1.3  && <1.4
     , filepath    >=1.4  && <1.5
     , io-classes  >=0.3  && <1.5
+    , primitive   ^>=0.9
     , text        >=1.2  && <2.2
 
   if os(windows)
@@ -69,3 +70,24 @@ library
     -Wall -Wcompat -Wincomplete-uni-patterns
     -Wincomplete-record-updates -Wpartial-fields -Widentities
     -Wredundant-constraints -Wmissing-export-lists -Wunused-packages
+
+test-suite fs-api-test
+  type:             exitcode-stdio-1.0
+  hs-source-dirs:   test
+  main-is:          Main.hs
+  other-modules:    Test.System.FS.IO
+  default-language: Haskell2010
+  build-depends:
+    , base
+    , bytestring
+    , fs-api
+    , primitive
+    , tasty
+    , tasty-quickcheck
+    , temporary
+
+  ghc-options:
+    -Wall -Wcompat -Wincomplete-uni-patterns
+    -Wincomplete-record-updates -Wpartial-fields -Widentities
+    -Wredundant-constraints -Wmissing-export-lists -Wunused-packages
+    -fno-ignore-asserts
