@@ -10,7 +10,7 @@ license-files:
 
 copyright:       2019-2023 Input Output Global Inc (IOG)
 author:          IOG Engineering Team
-maintainer:      operations@iohk.io, Joris Dral
+maintainer:      operations@iohk.io, Joris Dral (joris@well-typed.com)
 category:        Testing
 build-type:      Simple
 extra-doc-files: CHANGELOG.md
@@ -40,6 +40,7 @@ library
     , fs-api             ^>=0.2
     , io-classes         >=0.3  && <1.5
     , mtl
+    , primitive          ^>=0.9
     , QuickCheck
     , strict-stm         >=0.3  && <1.5
     , text               >=1.2  && <2.2
@@ -68,6 +69,7 @@ test-suite fs-sim-test
     , fs-sim
     , generics-sop
     , pretty-show
+    , primitive
     , QuickCheck
     , quickcheck-state-machine  >=0.7.2 && <0.8
     , random
