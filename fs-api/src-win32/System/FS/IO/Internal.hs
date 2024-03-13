@@ -8,11 +8,15 @@ module System.FS.IO.Internal (
   , getSize
   , open
   , pread
+  , preadBuf
+  , pwriteBuf
   , read
+  , readBuf
   , sameError
   , seek
   , truncate
   , write
+  , writeBuf
   ) where
 
 import           Prelude hiding (read, truncate)
@@ -26,6 +30,7 @@ import           Foreign (Int64, Ptr)
 import           System.FS.API.Types (AllowExisting (..), FsError (..),
                      FsErrorType (..), OpenMode (..), SeekMode (..))
 import           System.FS.IO.Internal.Handle
+import           System.Posix.Types
 import           System.Win32
 
 type FHandle = HandleOS HANDLE
@@ -78,12 +83,36 @@ read fh bytes = withOpenHandle "read" fh $ \h ->
 getCurrentFileOffset :: HANDLE -> IO Int64
 getCurrentFileOffset h = setFilePointerEx h 0 fILE_CURRENT
 
+readBuf :: FHandle -> Ptr Word8 -> ByteCount -> IO ByteCount
+readBuf fh buf c = withOpenHandle "readBuf" fh $ \h ->
+    fromIntegral <$> win32_ReadFile h buf (fromIntegral c) Nothing
+
+writeBuf :: FHandle -> Ptr Word8 -> ByteCount -> IO ByteCount
+writeBuf fh buf c = withOpenHandle "writeBuf" fh $ \h ->
+    fromIntegral <$> win32_WriteFile h buf (fromIntegral c) Nothing
+
 pread :: FHandle -> Word64 -> Word64 -> IO ByteString
 pread fh bytes pos = withOpenHandle "pread" fh $ \h ->
   Internal.createUptoN (fromIntegral bytes) $ \ptr -> do
     initialOffset <- getCurrentFileOffset h
     _ <- setFilePointerEx h (fromIntegral pos) fILE_BEGIN
     n <- fromIntegral <$> win32_ReadFile h ptr (fromIntegral bytes) Nothing
+    _ <- setFilePointerEx h initialOffset fILE_BEGIN
+    return n
+
+preadBuf :: FHandle -> Ptr Word8 -> ByteCount -> FileOffset -> IO ByteCount
+preadBuf fh buf c off = withOpenHandle "preadBuf" fh $ \h -> do
+    initialOffset <- getCurrentFileOffset h
+    _ <- setFilePointerEx h (fromIntegral off) fILE_BEGIN
+    n <- fromIntegral <$> win32_ReadFile h buf (fromIntegral c) Nothing
+    _ <- setFilePointerEx h initialOffset fILE_BEGIN
+    return n
+
+pwriteBuf :: FHandle -> Ptr Word8 -> ByteCount -> FileOffset -> IO ByteCount
+pwriteBuf fh buf c off = withOpenHandle "pwriteBuf" fh $ \h -> do
+    initialOffset <- getCurrentFileOffset h
+    _ <- setFilePointerEx h (fromIntegral off) fILE_BEGIN
+    n <- fromIntegral <$> win32_WriteFile h buf (fromIntegral c) Nothing
     _ <- setFilePointerEx h initialOffset fILE_BEGIN
     return n
 
