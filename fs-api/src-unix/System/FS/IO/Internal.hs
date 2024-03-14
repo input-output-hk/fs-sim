@@ -9,11 +9,15 @@ module System.FS.IO.Internal (
   , getSize
   , open
   , pread
+  , preadBuf
+  , pwriteBuf
   , read
+  , readBuf
   , sameError
   , seek
   , truncate
   , write
+  , writeBuf
   ) where
 
 import           Prelude hiding (read, truncate)
@@ -29,8 +33,9 @@ import           System.FS.API.Types (AllowExisting (..), OpenMode (..),
 import           System.FS.IO.Internal.Error (sameError)
 import           System.FS.IO.Internal.Handle
 import qualified System.Posix as Posix
-import           System.Posix (Fd)
-import           System.Posix.IO.ByteString.Ext (fdPreadBuf)
+import           System.Posix (ByteCount, Fd (..), FileOffset)
+import qualified System.Posix.IO.ByteString.Ext as Posix (fdPreadBuf,
+                     fdPwriteBuf)
 
 type FHandle = HandleOS Fd
 
@@ -130,10 +135,28 @@ read h bytes = withOpenHandle "read" h $ \fd ->
     Internal.createUptoN (fromIntegral bytes) $ \ptr ->
       fromIntegral <$> Posix.fdReadBuf fd ptr (fromIntegral bytes)
 
+readBuf :: FHandle -> Ptr Word8 -> ByteCount -> IO ByteCount
+readBuf f buf c = withOpenHandle "readBuf" f $ \fd -> Posix.fdReadBuf fd buf c
+
+writeBuf :: FHandle -> Ptr Word8 -> ByteCount -> IO ByteCount
+writeBuf f buf c = withOpenHandle "writeBuf" f $ \fd -> Posix.fdWriteBuf fd buf c
+
 pread :: FHandle -> Word64 -> Word64 -> IO ByteString
 pread h bytes offset = withOpenHandle "pread" h $ \fd ->
     Internal.createUptoN (fromIntegral bytes) $ \ptr ->
-      fromIntegral <$> fdPreadBuf fd ptr (fromIntegral bytes) (fromIntegral offset)
+      fromIntegral <$> Posix.fdPreadBuf fd ptr (fromIntegral bytes) (fromIntegral offset)
+
+-- | @'preadBuf' fh buf c off@ reads @c@ bytes into the buffer @buf@ from the file
+-- handle @fh@ at the file offset @off@. This does not move the position of the
+-- file handle.
+preadBuf :: FHandle -> Ptr Word8 -> ByteCount -> FileOffset -> IO ByteCount
+preadBuf h buf c off = withOpenHandle "preadBuf" h $ \fd -> Posix.fdPreadBuf fd buf c off
+
+-- | @'pwriteBuf' fh buf c off@ writes @c@ bytes from the data in the buffer
+-- @buf@ to the file handle @fh@ at the file offset @off@. This does not move
+-- the position of the file handle.
+pwriteBuf :: FHandle -> Ptr Word8 -> ByteCount -> FileOffset -> IO ByteCount
+pwriteBuf h buf c off = withOpenHandle "pwriteBuf" h $ \fd -> Posix.fdPwriteBuf fd buf c off
 
 -- | Truncates the file managed by the input 'FHandle' to the input size.
 truncate :: FHandle -> Word64 -> IO ()

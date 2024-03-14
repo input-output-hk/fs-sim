@@ -1,10 +1,12 @@
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE DerivingVia         #-}
-{-# LANGUAGE GADTs               #-}
-{-# LANGUAGE NamedFieldPuns      #-}
-{-# LANGUAGE RankNTypes          #-}
-{-# LANGUAGE RecordWildCards     #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE BangPatterns               #-}
+{-# LANGUAGE DataKinds                  #-}
+{-# LANGUAGE DerivingVia                #-}
+{-# LANGUAGE GADTs                      #-}
+{-# LANGUAGE GeneralisedNewtypeDeriving #-}
+{-# LANGUAGE NamedFieldPuns             #-}
+{-# LANGUAGE RankNTypes                 #-}
+{-# LANGUAGE RecordWildCards            #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
 
 -- | An abstract view over the filesystem.
 module System.FS.API (
@@ -17,13 +19,23 @@ module System.FS.API (
   , withFile
     -- * SomeHasFS
   , SomeHasFS (..)
+    -- * HasBufFS
+  , BufferOffset (..)
+  , HasBufFS (..)
+  , hGetBufExactly
+  , hGetBufExactlyAt
+  , hPutBufExactly
+  , hPutBufExactlyAt
   ) where
 
 import           Control.Monad.Class.MonadThrow
+import           Control.Monad.Primitive (PrimMonad (..))
 import qualified Data.ByteString as BS
 import           Data.Int (Int64)
+import           Data.Primitive (MutableByteArray)
 import           Data.Set (Set)
 import           Data.Word
+import           System.Posix.Types (ByteCount)
 
 import           System.FS.API.Types as Types
 
@@ -175,3 +187,168 @@ hClose' HasFS { hClose, hIsOpen } h = do
 -- hides an existential @h@ parameter of a 'HasFS'.
 data SomeHasFS m where
   SomeHasFS :: Eq h => HasFS m h -> SomeHasFS m
+
+{-------------------------------------------------------------------------------
+  HasBufFS
+-------------------------------------------------------------------------------}
+
+-- | Absolute offset into a buffer (i.e., 'MutableByteArray').
+--
+-- Can be negative, because buffer offsets can be added together to change
+-- offset positions. This is similar to 'plusPtr' for 'Ptr' types. However, note
+-- that reading or writing from a buffer at a negative offset leads to undefined
+-- behaviour.
+newtype BufferOffset = BufferOffset { unBufferOffset :: Int }
+  deriving (Eq, Ord, Enum, Bounded, Num, Show)
+
+-- | Abstract interface for performing I\/O using user-supplied buffers.
+--
+-- [User-supplied buffers]: It is the user's responsiblity to provide buffers
+--   that are large enough. Behaviour is undefined if the I\/O operations access
+--   the buffer outside it's allocated range.
+--
+-- Note: this interface is likely going to become part of the 'HasFS' interface,
+-- but is separated for now so downstream code does not break.
+data HasBufFS m h = HasBufFS {
+    -- | Like 'hGetSome', but the bytes are read into a user-supplied buffer.
+    -- See __User-supplied buffers__.
+    hGetBufSome      :: HasCallStack
+                     => Handle h
+                     -> MutableByteArray (PrimState m) -- ^ Buffer to read bytes into
+                     -> BufferOffset -- ^ Offset into buffer
+                     -> ByteCount -- ^ The number of bytes to read
+                     -> m ByteCount
+    -- | Like 'hGetSomeAt', but the bytes are read into a user-supplied buffer.
+    -- See __User-supplied buffers__.
+  , hGetBufSomeAt    :: HasCallStack
+                     => Handle h
+                     -> MutableByteArray (PrimState m)   -- ^ Buffer to read bytes into
+                     -> BufferOffset -- ^ Offset into buffer
+                     -> ByteCount -- ^ The number of bytes to read
+                     -> AbsOffset -- ^ The file offset at which to read
+                     -> m ByteCount
+    -- | Like 'hPutSome', but the bytes are written from a user-supplied buffer.
+    -- See __User-supplied buffers__.
+  , hPutBufSome      :: HasCallStack
+                     => Handle h
+                     -> MutableByteArray (PrimState m) -- ^ Buffer to write bytes from
+                     -> BufferOffset -- ^ Offset into buffer
+                     -> ByteCount -- ^ The number of bytes to write
+                     -> m ByteCount
+    -- | Like 'hPutSome', but the bytes are written from a user-supplied buffer
+    -- at a given file offset. This offset does not affect the offset stored in
+    -- the file handle (see also 'hGetSomeAt'). See __User-supplied buffers__.
+  , hPutBufSomeAt    :: HasCallStack
+                     => Handle h
+                     -> MutableByteArray (PrimState m)   -- ^ Buffer to write bytes from
+                     -> BufferOffset -- ^ Offset into buffer
+                     -> ByteCount -- ^ The number of bytes to write
+                     -> AbsOffset -- ^ The file offset at which to write
+                     -> m ByteCount
+  }
+
+-- | Wrapper for 'hGetBufSome' that ensures that we read exactly as many
+-- bytes as requested. If EOF is found before the requested number of bytes is
+-- read, an 'FsError' exception is thrown.
+hGetBufExactly :: forall m h. (HasCallStack, MonadThrow m)
+               => HasFS m h
+               -> HasBufFS m h
+               -> Handle h
+               -> MutableByteArray (PrimState m) -- ^ Buffer to read bytes into
+               -> BufferOffset -- ^ Offset into buffer
+               -> ByteCount  -- ^ The number of bytes to read
+               -> m ByteCount
+hGetBufExactly hfs hbfs h buf bufOff c = go c bufOff
+  where
+    go :: ByteCount -> BufferOffset -> m ByteCount
+    go !remainingCount !currentBufOff
+      | remainingCount == 0 = pure c
+      | otherwise            = do
+          readBytes <- hGetBufSome hbfs h buf currentBufOff c
+          if readBytes == 0 then
+            throwIO FsError {
+                fsErrorType   = FsReachedEOF
+              , fsErrorPath   = mkFsErrorPath hfs $ handlePath h
+              , fsErrorString = "hGetBufExactly found eof before reading " ++ show c ++ " bytes"
+              , fsErrorNo     = Nothing
+              , fsErrorStack  = prettyCallStack
+              , fsLimitation  = False
+              }
+          -- We know the length <= remainingBytes, so this can't underflow.
+          else go (remainingCount - readBytes)
+                  (currentBufOff + fromIntegral readBytes)
+
+-- | Wrapper for 'hGetBufSomeAt' that ensures that we read exactly as many bytes
+-- as requested. If EOF is found before the requested number of bytes is read,
+-- an 'FsError' exception is thrown.
+hGetBufExactlyAt :: forall m h. (HasCallStack, MonadThrow m)
+                 => HasFS m h
+                 -> HasBufFS m h
+                 -> Handle h
+                 -> MutableByteArray (PrimState m)   -- ^ Buffer to read bytes into
+                 -> BufferOffset -- ^ Offset into buffer
+                 -> ByteCount -- ^ The number of bytes to read
+                 -> AbsOffset -- ^ The file offset at which to read
+                 -> m ByteCount
+hGetBufExactlyAt hfs hbfs h buf bufOff c off = go c off bufOff
+  where
+    go :: ByteCount -> AbsOffset -> BufferOffset -> m ByteCount
+    go !remainingCount !currentOffset !currentBufOff
+      | remainingCount == 0 = pure c
+      | otherwise            = do
+          readBytes <- hGetBufSomeAt hbfs h buf currentBufOff c currentOffset
+          if readBytes == 0 then
+            throwIO FsError {
+                fsErrorType   = FsReachedEOF
+              , fsErrorPath   = mkFsErrorPath hfs $ handlePath h
+              , fsErrorString = "hGetBufExactlyAt found eof before reading " ++ show c ++ " bytes"
+              , fsErrorNo     = Nothing
+              , fsErrorStack  = prettyCallStack
+              , fsLimitation  = False
+              }
+          -- We know the length <= remainingBytes, so this can't underflow.
+          else go (remainingCount - readBytes)
+                  (currentOffset + fromIntegral readBytes)
+                  (currentBufOff + fromIntegral readBytes)
+
+-- | Wrapper for 'hPutBufSome' that ensures we write exactly as many bytes as
+-- requested.
+hPutBufExactly :: forall m h. (HasCallStack, MonadThrow m)
+                 => HasBufFS m h
+                 -> Handle h
+                 -> MutableByteArray (PrimState m) -- ^ Buffer to write bytes from
+                 -> BufferOffset -- ^ Offset into buffer
+                 -> ByteCount  -- ^ The number of bytes to write
+                 -> m ByteCount
+hPutBufExactly hbfs h buf bufOff c = go c bufOff
+  where
+    go :: ByteCount -> BufferOffset -> m ByteCount
+    go !remainingCount !currentBufOff = do
+      writtenBytes <- hPutBufSome hbfs h buf currentBufOff remainingCount
+      let remainingCount' = remainingCount - writtenBytes
+      if remainingCount' == 0
+        then pure c
+        else go remainingCount'
+                (currentBufOff + fromIntegral writtenBytes)
+
+-- | Wrapper for 'hPutBufSomeAt' that ensures we write exactly as many bytes as
+-- requested.
+hPutBufExactlyAt :: forall m h. (HasCallStack, MonadThrow m)
+                 => HasBufFS m h
+                 -> Handle h
+                 -> MutableByteArray (PrimState m)   -- ^ Buffer to write bytes from
+                 -> BufferOffset -- ^ Offset into buffer
+                 -> ByteCount -- ^ The number of bytes to write
+                 -> AbsOffset -- ^ The file offset at which to write
+                 -> m ByteCount
+hPutBufExactlyAt hbfs h buf bufOff c off = go c off bufOff
+  where
+    go :: ByteCount -> AbsOffset -> BufferOffset -> m ByteCount
+    go !remainingCount !currentOffset !currentBufOff = do
+      writtenBytes <- hPutBufSomeAt hbfs h buf currentBufOff remainingCount currentOffset
+      let remainingCount' = remainingCount - writtenBytes
+      if remainingCount' == 0
+        then pure c
+        else go remainingCount'
+                (currentOffset + fromIntegral writtenBytes)
+                (currentBufOff + fromIntegral writtenBytes)
