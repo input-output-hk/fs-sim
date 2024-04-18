@@ -8,12 +8,15 @@ license-files:
   LICENSE
   NOTICE
 
-copyright:       2019-2023 Input Output Global Inc (IOG)
+copyright:       2019-2024 Input Output Global Inc (IOG)
 author:          IOG Engineering Team
-maintainer:      operations@iohk.io, Joris Dral
+maintainer:      operations@iohk.io, Joris Dral (joris@well-typed.com)
 category:        Testing
 build-type:      Simple
-extra-doc-files: CHANGELOG.md
+extra-doc-files:
+  CHANGELOG.md
+  README.md
+
 tested-with:     GHC ==8.10 || ==9.2 || ==9.4 || ==9.6 || ==9.8
 
 source-repository head
@@ -27,10 +30,10 @@ library
     System.FS.Sim.Error
     System.FS.Sim.FsTree
     System.FS.Sim.MockFS
-    System.FS.Sim.Pure
     System.FS.Sim.STM
     System.FS.Sim.Stream
 
+  other-modules:    System.FS.Sim.Prim
   default-language: Haskell2010
   build-depends:
     , base               >=4.14 && <4.20
@@ -40,6 +43,7 @@ library
     , fs-api             ^>=0.2
     , io-classes         >=0.3  && <1.5
     , mtl
+    , primitive          ^>=0.9
     , QuickCheck
     , strict-stm         >=0.3  && <1.5
     , text               >=1.2  && <2.2
@@ -51,9 +55,12 @@ library
 
 test-suite fs-sim-test
   type:             exitcode-stdio-1.0
-  hs-source-dirs:   test
+  hs-source-dirs:   test src
   main-is:          Main.hs
   other-modules:
+    System.FS.Sim.FsTree
+    System.FS.Sim.MockFS
+    System.FS.Sim.Prim
     Test.System.FS.Sim.FsTree
     Test.System.FS.StateMachine
     Test.Util.RefEnv
@@ -61,13 +68,16 @@ test-suite fs-sim-test
   default-language: Haskell2010
   build-depends:
     , base
+    , base16-bytestring
     , bifunctors
     , bytestring
     , containers
     , fs-api
     , fs-sim
     , generics-sop
+    , mtl
     , pretty-show
+    , primitive
     , QuickCheck
     , quickcheck-state-machine  >=0.7.2 && <0.8
     , random

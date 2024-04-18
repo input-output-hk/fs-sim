@@ -1,5 +1,16 @@
 # Revision history for fs-sim
 
+## next version -- ????-??-??
+
+### Breaking
+
+* Remove `System.FS.Sim.Pure` module.
+
+### Non-breaking
+
+* Add a new `simHasBufFS` function, which equips an IO-like monad with a
+  `HasBufFS` instance.
+
 ## 0.2.1.1 -- 2023-10-30
 
 ### Patch

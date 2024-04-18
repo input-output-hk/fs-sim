@@ -3,8 +3,11 @@
 {-# LANGUAGE DeriveGeneric            #-}
 {-# LANGUAGE DeriveTraversable        #-}
 {-# LANGUAGE FlexibleInstances        #-}
+{-# LANGUAGE InstanceSigs             #-}
 {-# LANGUAGE LambdaCase               #-}
+{-# LANGUAGE MagicHash                #-}
 {-# LANGUAGE PolyKinds                #-}
+{-# LANGUAGE RankNTypes               #-}
 {-# LANGUAGE RecordWildCards          #-}
 {-# LANGUAGE ScopedTypeVariables      #-}
 {-# LANGUAGE StandaloneDeriving       #-}
@@ -14,6 +17,7 @@
 {-# LANGUAGE TypeApplications         #-}
 {-# LANGUAGE TypeFamilies             #-}
 {-# LANGUAGE TypeOperators            #-}
+{-# LANGUAGE UnboxedTuples            #-}
 {-# LANGUAGE UndecidableInstances     #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
@@ -55,6 +59,8 @@ module Test.System.FS.StateMachine (
 
 import qualified Control.Exception as E
 import           Control.Monad
+import           Control.Monad.Primitive
+import           Control.Monad.ST.Strict (runST)
 import           Data.Bifoldable
 import           Data.Bifunctor
 import qualified Data.Bifunctor.TH as TH
@@ -67,6 +73,8 @@ import           Data.List (foldl')
 import qualified Data.List as L
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
+import           Data.Maybe (fromJust)
+import           Data.Primitive (MutableByteArray, newPinnedByteArray)
 import           Data.Proxy
 import           Data.Set (Set)
 import qualified Data.Set as Set
@@ -77,6 +85,7 @@ import qualified Generics.SOP as SOP
 import           GHC.Generics
 import           GHC.Stack hiding (prettyCallStack)
 import           System.IO.Temp (withTempDirectory)
+import           System.Posix.Types (ByteCount)
 import           System.Random (getStdRandom, randomR)
 import           Text.Read (readMaybe)
 import           Text.Show.Pretty (ppShow)
@@ -103,7 +112,7 @@ import           Util.Condense
 import           System.FS.Sim.FsTree (FsTree (..))
 import qualified System.FS.Sim.MockFS as Mock
 import           System.FS.Sim.MockFS (HandleMock, MockFS)
-import           System.FS.Sim.Pure
+import           System.FS.Sim.Prim
 
 import qualified Test.Util.RefEnv as RE
 import           Test.Util.RefEnv (RefEnv)
@@ -147,7 +156,11 @@ data Cmd fp h =
   | Seek               h SeekMode Int64
   | Get                h Word64
   | GetAt              h Word64 AbsOffset
+  | GetBuf             h ByteCount
+  | GetBufAt           h ByteCount AbsOffset
   | Put                h ByteString
+  | PutBuf             h ByteString ByteCount
+  | PutBufAt           h ByteString ByteCount AbsOffset
   | Truncate           h Word64
   | GetSize            h
   | CreateDir          (PathExpr fp)
@@ -171,16 +184,19 @@ data Success fp h =
   | Path       fp ()
   | Word64     Word64
   | ByteString ByteString
+  | ByteCount  ByteCount
+  | BCBS       ByteCount ByteString
   | Strings    (Set String)
   | Bool       Bool
   deriving (Eq, Show, Functor, Foldable)
 
 -- | Successful semantics
-run :: forall m h. Monad m
+run :: forall m h. (PrimMonad m, HasCallStack)
     => HasFS m h
+    -> HasBufFS m h
     -> Cmd FsPath (Handle h)
     -> m (Success FsPath (Handle h))
-run hasFS@HasFS{..} = go
+run hasFS@HasFS{..} hasBufFS = go
   where
     go :: Cmd FsPath (Handle h) -> m (Success FsPath (Handle h))
     go (Open pe mode) =
@@ -198,7 +214,11 @@ run hasFS@HasFS{..} = go
     -- partial reads/writes, see #502.
     go (Get      h n           ) = ByteString <$> hGetSomeChecked hasFS h n
     go (GetAt    h n o         ) = ByteString <$> hGetSomeAtChecked hasFS h n o
+    go (GetBuf   h n           ) = uncurry BCBS <$> hGetBufSomeChecked hasFS hasBufFS h n
+    go (GetBufAt h n o         ) = uncurry BCBS <$> hGetBufSomeAtChecked hasFS hasBufFS h n o
     go (Put      h bs          ) = Word64     <$> hPutSomeChecked hasFS h bs
+    go (PutBuf   h bs n        ) = ByteCount  <$> hPutBufSomeChecked hasBufFS h bs n
+    go (PutBufAt h bs n o      ) = ByteCount  <$> hPutBufSomeAtChecked hasBufFS h bs n o
     go (Truncate h sz          ) = Unit       <$> hTruncate h sz
     go (GetSize  h             ) = Word64     <$> hGetSize  h
     go (ListDirectory      pe  ) = withPE  pe      (const Strings) $ listDirectory
@@ -223,7 +243,6 @@ run hasFS@HasFS{..} = go
       let fp1 = evalPathExpr pe1
           fp2 = evalPathExpr pe2
       in r fp1 fp2 <$> f fp1 fp2
-
 
 {-------------------------------------------------------------------------------
   Detecting partial reads/writes of the tested IO implementation
@@ -299,6 +318,63 @@ hPutSomeChecked HasFS{..} h bytes = do
       then error "Unsupported partial write detected, see Note [Checking for partial reads/writes]"
       else return n
 
+hGetBufSomeChecked :: (HasCallStack, PrimMonad m)
+                   => HasFS m h
+                   -> HasBufFS m h
+                   -> Handle h -> ByteCount -> m (ByteCount, ByteString)
+hGetBufSomeChecked HasFS{..} HasBufFS{..} h n = do
+    allocaMutableByteArray (fromIntegral n) $ \buf -> do
+      n' <- hGetBufSome h buf 0 n
+      bs <- fromJust <$> Mock.fromBuffer buf 0 n'
+      when (n /= n') $ do
+        moreBytes <- hGetSome h 1
+        -- If we can actually read more bytes, the last read was partial. If we
+        -- cannot, we really were at EOF.
+        unless (BS.null moreBytes) $
+          error "Unsupported partial read detected, see #502"
+      pure (n', bs)
+
+hGetBufSomeAtChecked :: (HasCallStack, PrimMonad m)
+                     => HasFS m h
+                     -> HasBufFS m h
+                     -> Handle h -> ByteCount -> AbsOffset -> m (ByteCount, ByteString)
+hGetBufSomeAtChecked HasFS{..} HasBufFS{..} h n o = do
+    allocaMutableByteArray (fromIntegral n) $ \buf -> do
+      n' <- hGetBufSomeAt h buf 0 n o
+      bs <- fromJust <$> Mock.fromBuffer buf 0 n'
+      when (n /= n') $ do
+        moreBytes <- hGetSomeAt h 1 $ o + fromIntegral n'
+        -- If we can actually read more bytes, the last read was partial. If we
+        -- cannot, we really were at EOF.
+        unless (BS.null moreBytes) $
+          error "Unsupported partial read detected, see #502"
+      pure (n', bs)
+
+hPutBufSomeChecked :: (HasCallStack, PrimMonad m)
+                   => HasBufFS m h
+                   -> Handle h -> ByteString -> ByteCount -> m ByteCount
+hPutBufSomeChecked HasBufFS{..} h bs n =
+    allocaMutableByteArray (min (fromIntegral n) (BS.length bs)) $ \buf -> do
+      void $ Mock.intoBuffer buf 0 (BS.take (fromIntegral n) bs)
+      n' <- hPutBufSome h buf 0 n
+      if n /= n'
+        then error "Unsupported partial write detected, see #502"
+        else return n
+
+hPutBufSomeAtChecked :: (HasCallStack, PrimMonad m)
+                     => HasBufFS m h
+                     -> Handle h -> ByteString -> ByteCount -> AbsOffset -> m ByteCount
+hPutBufSomeAtChecked HasBufFS{..} h bs n o =
+    allocaMutableByteArray (min (fromIntegral n) (BS.length bs)) $ \buf -> do
+      void $ Mock.intoBuffer buf 0 (BS.take (fromIntegral n) bs)
+      n' <- hPutBufSomeAt h buf 0 n o
+      if n /= n'
+        then error "Unsupported partial write detected, see #502"
+        else return n
+
+allocaMutableByteArray :: PrimMonad m => Int -> (MutableByteArray (PrimState m) -> m a) -> m a
+allocaMutableByteArray size action = newPinnedByteArray size >>= action
+
 {-------------------------------------------------------------------------------
   Instantiating the semantics
 -------------------------------------------------------------------------------}
@@ -316,7 +392,7 @@ instance (Eq fp, Eq h) => Eq (Resp fp h) where
 runPure :: Cmd FsPath (Handle HandleMock)
         -> MockFS -> (Resp FsPath (Handle HandleMock), MockFS)
 runPure cmd mockFS =
-    aux $ runPureSimFS (run pureHasFS cmd) mockFS
+    aux $ runST $ runFSSimT (run primHasFS primHasBufFS cmd) mockFS
   where
     aux :: Either FsError (Success FsPath (Handle HandleMock), MockFS)
         -> (Resp FsPath (Handle HandleMock), MockFS)
@@ -325,7 +401,7 @@ runPure cmd mockFS =
 
 runIO :: MountPoint
       -> Cmd FsPath (Handle HandleIO) -> IO (Resp FsPath (Handle HandleIO))
-runIO mount cmd = Resp <$> E.try (run (ioHasFS mount) cmd)
+runIO mount cmd = Resp <$> E.try (run (ioHasFS mount) (ioHasBufFS mount) cmd)
 
 {-------------------------------------------------------------------------------
   Bitraversable instances
@@ -511,7 +587,11 @@ generator Model{..} = oneof $ concat [
         , fmap At $ Seek     <$> genHandle <*> genSeekMode <*> genOffset
         , fmap At $ Get      <$> genHandle <*> (getSmall <$> arbitrary)
         , fmap At $ GetAt    <$> genHandle <*> (getSmall <$> arbitrary) <*> arbitrary
+        , fmap At $ GetBuf   <$> genHandle <*> (getSmall <$> arbitrary)
+        , fmap At $ GetBufAt <$> genHandle <*> (getSmall <$> arbitrary) <*> arbitrary
         , fmap At $ Put      <$> genHandle <*> (BS.pack <$> arbitrary)
+        , fmap At $ PutBuf   <$> genHandle <*> (BS.pack <$> arbitrary) <*> (getSmall <$> arbitrary)
+        , fmap At $ PutBufAt <$> genHandle <*> (BS.pack <$> arbitrary) <*> (getSmall <$> arbitrary) <*> arbitrary
         , fmap At $ Truncate <$> genHandle <*> (getSmall . getNonNegative <$> arbitrary)
         , fmap At $ GetSize  <$> genHandle
         ]
@@ -639,7 +719,19 @@ shrinker Model{..} (At cmd) =
       GetAt    h n o -> At <$>
         [GetAt h n o' | o' <- shrink o] <>
         [GetAt h n' o | n' <- shrink n]
+      GetBuf h n -> At <$>
+        [GetBuf h n' | n' <- shrink n]
+      GetBufAt h n o -> At <$>
+        [GetBufAt h n' o | n' <- shrink n] <>
+        [GetBufAt h n o' | o' <- shrink o]
       Put      h bs  -> At . Put      h <$> shrinkBytes bs
+      PutBuf   h bs n -> At <$>
+        [PutBuf h bs' n | bs' <- BS.pack <$> shrink (BS.unpack bs)] <>
+        [PutBuf h bs n' | n' <- shrink n]
+      PutBufAt h bs n o -> At <$>
+        [PutBufAt h bs' n o | bs' <- BS.pack <$> shrink (BS.unpack bs)] <>
+        [PutBufAt h bs n' o | n' <- shrink n] <>
+        [PutBufAt h bs n o' | o' <- shrink o]
       Truncate h n   -> At . Truncate h <$> shrink n
 
       _otherwise ->
@@ -936,6 +1028,18 @@ data Tag =
   --
   -- > GetAt ...
   | TagPread
+
+  -- Roundtrip for I/O with user-supplied buffers
+  --
+  -- > PutBuf h bs c
+  -- > GetBuf h c          (==bs)
+  | TagPutGetBuf
+
+  -- Roundtrip for I/O with user-supplied buffers
+  --
+  -- > PutBufAt h bs c o
+  -- > GetBufAt h c o      (==bs)
+  | TagPutGetBufAt
   deriving (Show, Eq)
 
 -- | Predicate on events
@@ -988,6 +1092,8 @@ tag = C.classify [
     , tagExclusiveFail
     , tagReadEOF
     , tagPread
+    , tagPutGetBuf Set.empty
+    , tagPutGetBufAt Set.empty
     ]
   where
     tagCreateDirThenListDir :: Set FsPath -> EventPred
@@ -1342,6 +1448,26 @@ tag = C.classify [
         GetAt{}    -> Left  TagPread
         _otherwise -> Right tagPread
 
+    tagPutGetBufAt :: Set HandleMock -> EventPred
+    tagPutGetBufAt put = successful $ \ev _ ->
+      case eventMockCmd ev of
+        PutBufAt (Handle h _) bs c _ | BS.length bs > 0 && c > 0 ->
+          Right (tagPutGetBufAt (Set.insert h put))
+        GetBufAt _ c _ | c > 0 ->
+          Left TagPutGetBufAt
+        _otherwise ->
+          Right (tagPutGetBufAt put)
+
+    tagPutGetBuf :: Set HandleMock -> EventPred
+    tagPutGetBuf put = successful $ \ev _ ->
+      case eventMockCmd ev of
+        PutBuf (Handle h _) bs c | BS.length bs > 0 && c > 0 ->
+          Right (tagPutGetBuf (Set.insert h put))
+        GetBuf _ c | c > 0 ->
+          Left TagPutGetBuf
+        _otherwise ->
+          Right (tagPutGetBuf put)
+
 -- | Step the model using a 'QSM.Command' (i.e., a command associated with
 -- an explicit set of variables)
 execCmd :: Model Symbolic -> QSM.Command (At Cmd) (At Resp) -> Event Symbolic
@@ -1467,6 +1593,7 @@ runCmds tmpDir cmds = QC.monadicIO $ do
         $ QSM.checkCommandNames cmds
         $ tabulate "Tags" (map show $ tag (execCmds cmds))
         $ counterexample ("Mount point: " ++ tstTmpDir)
+        $ QSM.checkCommandNames cmds
         $ res === QSM.Ok
 
 tests :: FilePath -> TestTree
@@ -1475,6 +1602,7 @@ tests tmpDir = testGroup "HasFS" [
     , localOption (QuickCheckTests 1)
     $ testProperty "regression_removeFileOnDir" $ runCmds tmpDir regression_removeFileOnDir
     ]
+
 
 -- | Unused mount mount
 --
@@ -1560,7 +1688,11 @@ instance (Condense fp, Condense h) => Condense (Cmd fp h) where
       go (Seek h mode o)           = ["seek", condense h, condense mode, condense o]
       go (Get h n)                 = ["get", condense h, condense n]
       go (GetAt h n o)             = ["getAt", condense h, condense n, condense o]
+      go (GetBuf h n)              = ["getBuf", condense h, condense n]
+      go (GetBufAt h n o)          = ["getBufAt", condense h, condense n, condense o]
       go (Put h bs)                = ["put", condense h, condense bs]
+      go (PutBuf h bs n)           = ["putBuf", condense h, condense bs, condense n]
+      go (PutBufAt h bs n o)       = ["putBufAt", condense h, condense bs, condense n, condense o]
       go (Truncate h sz)           = ["truncate", condense h, condense sz]
       go (GetSize h)               = ["getSize", condense h]
       go (CreateDir fp)            = ["createDir", condense fp]
@@ -1579,6 +1711,9 @@ instance Condense Tag where
   condense = show
 
 instance Condense AbsOffset where
+  condense = show
+
+instance Condense ByteCount where
   condense = show
 
 {-------------------------------------------------------------------------------

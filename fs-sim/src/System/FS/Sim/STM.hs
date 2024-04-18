@@ -1,21 +1,25 @@
+{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications    #-}
+{- HLINT ignore "Avoid lambda" -}
 
 -- | 'HasFS' instance using 'MockFS' stored in an STM variable
 module System.FS.Sim.STM (
     runSimFS
   , simHasFS
   , simHasFS'
+  , simHasBufFS
   ) where
 
 import           Control.Concurrent.Class.MonadSTM.Strict
 import           Control.Monad.Class.MonadThrow
+import           Control.Monad.Primitive
 
 import           System.FS.API
 
 import qualified System.FS.Sim.MockFS as Mock
 import           System.FS.Sim.MockFS (HandleMock, MockFS)
-import           System.FS.Sim.Pure (PureSimFS, runPureSimFS)
+import           System.FS.Sim.Prim
 
 {------------------------------------------------------------------------------
   The simulation-related types
@@ -67,11 +71,11 @@ simHasFS var = HasFS {
     , unsafeToFilePath         = \_ -> error "simHasFS:unsafeToFilePath"
     }
   where
-    sim :: PureSimFS a -> m a
+    sim :: FSSim a -> m a
     sim m = do
       eOrA <- atomically $ do
         st <- readTVar var
-        case runPureSimFS m st of
+        case runFSSim m st of
           Left e -> return $ Left e
           Right (a, st') -> do
             writeTVar var st'
@@ -83,3 +87,23 @@ simHasFS var = HasFS {
 
     (..:) :: (y -> z) -> (x0 -> x1 -> x2 -> y) -> (x0 -> x1 -> x2 -> z)
     (f ..: g) x0 x1 x2 = f (g x0 x1 x2)
+
+-- | Equip @m@ with a @HasBufFS@ instance using the mock file system
+simHasBufFS :: forall m. (MonadSTM m, MonadThrow m, PrimMonad m)
+            => StrictTMVar m MockFS
+            -> HasBufFS m HandleMock
+simHasBufFS var = HasBufFS {
+      hGetBufSome = \a b c d -> sim (Mock.hGetBufSome a b c d)
+    , hGetBufSomeAt = undefined
+    , hPutBufSome = undefined
+    , hPutBufSomeAt = undefined
+    }
+  where
+    sim :: FSSimT m a -> m a
+    sim m = do
+      st <- atomically $ takeTMVar var
+      runFSSimT m st >>= \case
+          Left e -> throwIO e
+          Right (a, st') -> do
+            atomically $ putTMVar var st'
+            return a
