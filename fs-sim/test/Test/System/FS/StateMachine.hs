@@ -214,8 +214,8 @@ run hasFS@HasFS{..} hasBufFS = go
     -- partial reads/writes, see #502.
     go (Get      h n           ) = ByteString <$> hGetSomeChecked hasFS h n
     go (GetAt    h n o         ) = ByteString <$> hGetSomeAtChecked hasFS h n o
-    go (GetBuf   h n           ) = uncurry BCBS <$> hGetBufSomeChecked hasFS hasBufFS h n
-    go (GetBufAt h n o         ) = uncurry BCBS <$> hGetBufSomeAtChecked hasFS hasBufFS h n o
+    go (GetBuf   h n           ) = uncurry BCBS <$> hGetBufSomeChecked hasFS h n
+    go (GetBufAt h n o         ) = uncurry BCBS <$> hGetBufSomeAtChecked hasFS h n o
     go (Put      h bs          ) = Word64     <$> hPutSomeChecked hasFS h bs
     go (PutBuf   h bs n        ) = ByteCount  <$> hPutBufSomeChecked hasBufFS h bs n
     go (PutBufAt h bs n o      ) = ByteCount  <$> hPutBufSomeAtChecked hasBufFS h bs n o
@@ -286,24 +286,24 @@ run hasFS@HasFS{..} hasBufFS = go
   the real implementation are in sync.
 -}
 
-hGetSomeChecked :: (Monad m, HasCallStack)
+hGetSomeChecked :: (PrimMonad m, HasCallStack)
                 => HasFS m h -> Handle h -> Word64 -> m ByteString
-hGetSomeChecked HasFS{..} h n = do
-    bytes <- hGetSome h n
+hGetSomeChecked hfs h n = do
+    bytes <- hGetSome hfs h n
     when (fromIntegral (BS.length bytes) /= n) $ do
-      moreBytes <- hGetSome h 1
+      moreBytes <- hGetSome hfs h 1
       -- If we can actually read more bytes, the last read was partial. If we
       -- cannot, we really were at EOF.
       unless (BS.null moreBytes) $
         error "Unsupported partial read detected, see Note [Checking for partial reads/writes]"
     return bytes
 
-hGetSomeAtChecked :: (Monad m, HasCallStack)
+hGetSomeAtChecked :: (PrimMonad m, HasCallStack)
                   => HasFS m h -> Handle h -> Word64 -> AbsOffset -> m ByteString
-hGetSomeAtChecked HasFS{..} h n o = do
-    bytes <- hGetSomeAt h n o
+hGetSomeAtChecked hfs h n o = do
+    bytes <- hGetSomeAt hfs h n o
     when (fromIntegral (BS.length bytes) /= n) $ do
-      moreBytes <- hGetSomeAt h 1 $ o + fromIntegral (BS.length bytes)
+      moreBytes <- hGetSomeAt hfs h 1 $ o + fromIntegral (BS.length bytes)
       -- If we can actually read more bytes, the last read was partial. If we
       -- cannot, we really were at EOF.
       unless (BS.null moreBytes) $
@@ -320,14 +320,13 @@ hPutSomeChecked HasFS{..} h bytes = do
 
 hGetBufSomeChecked :: (HasCallStack, PrimMonad m)
                    => HasFS m h
-                   -> HasBufFS m h
                    -> Handle h -> ByteCount -> m (ByteCount, ByteString)
-hGetBufSomeChecked HasFS{..} HasBufFS{..} h n = do
+hGetBufSomeChecked hfs h n = do
     allocaMutableByteArray (fromIntegral n) $ \buf -> do
-      n' <- hGetBufSome h buf 0 n
+      n' <- hGetBufSome hfs h buf 0 n
       bs <- fromJust <$> Mock.fromBuffer buf 0 n'
       when (n /= n') $ do
-        moreBytes <- hGetSome h 1
+        moreBytes <- hGetSome hfs h 1
         -- If we can actually read more bytes, the last read was partial. If we
         -- cannot, we really were at EOF.
         unless (BS.null moreBytes) $
@@ -336,14 +335,13 @@ hGetBufSomeChecked HasFS{..} HasBufFS{..} h n = do
 
 hGetBufSomeAtChecked :: (HasCallStack, PrimMonad m)
                      => HasFS m h
-                     -> HasBufFS m h
                      -> Handle h -> ByteCount -> AbsOffset -> m (ByteCount, ByteString)
-hGetBufSomeAtChecked HasFS{..} HasBufFS{..} h n o = do
+hGetBufSomeAtChecked hfs h n o = do
     allocaMutableByteArray (fromIntegral n) $ \buf -> do
-      n' <- hGetBufSomeAt h buf 0 n o
+      n' <- hGetBufSomeAt hfs h buf 0 n o
       bs <- fromJust <$> Mock.fromBuffer buf 0 n'
       when (n /= n') $ do
-        moreBytes <- hGetSomeAt h 1 $ o + fromIntegral n'
+        moreBytes <- hGetSomeAt hfs h 1 $ o + fromIntegral n'
         -- If we can actually read more bytes, the last read was partial. If we
         -- cannot, we really were at EOF.
         unless (BS.null moreBytes) $

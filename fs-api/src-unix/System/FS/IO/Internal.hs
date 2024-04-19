@@ -1,5 +1,5 @@
-{-# LANGUAGE CPP            #-}
-{-# LANGUAGE PackageImports #-}
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE CPP          #-}
 
 -- | This is meant to be used for the implementation of HasFS instances and not
 -- directly by client code.
@@ -131,12 +131,13 @@ seek h seekMode offset = withOpenHandle "seek" h $ \fd ->
 
 -- | Reads a given number of bytes from the input 'FHandle'.
 read :: FHandle -> Word64 -> IO ByteString
-read h bytes = withOpenHandle "read" h $ \fd ->
+read h !bytes = withOpenHandle "read" h $ \fd ->
     Internal.createUptoN (fromIntegral bytes) $ \ptr ->
       fromIntegral <$> Posix.fdReadBuf fd ptr (fromIntegral bytes)
 
+{-# INLINABLE readBuf #-}
 readBuf :: FHandle -> Ptr Word8 -> ByteCount -> IO ByteCount
-readBuf f buf c = withOpenHandle "readBuf" f $ \fd -> Posix.fdReadBuf fd buf c
+readBuf f buf !c = withOpenHandle "readBuf" f $ \fd -> Posix.fdReadBuf fd buf c
 
 writeBuf :: FHandle -> Ptr Word8 -> ByteCount -> IO ByteCount
 writeBuf f buf c = withOpenHandle "writeBuf" f $ \fd -> Posix.fdWriteBuf fd buf c

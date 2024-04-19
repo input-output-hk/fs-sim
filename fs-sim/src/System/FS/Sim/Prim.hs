@@ -47,8 +47,10 @@ pureHasFS = HasFS {
     , hClose                   = Mock.hClose
     , hIsOpen                  = Mock.hIsOpen
     , hSeek                    = Mock.hSeek
-    , hGetSome                 = Mock.hGetSome
-    , hGetSomeAt               = Mock.hGetSomeAt
+    , hGetSome_                = Mock.hGetSome
+    , hGetBufSome              = undefined -- TODO
+    , hGetSomeAt_              = Mock.hGetSomeAt
+    , hGetBufSomeAt            = undefined -- TODO
     , hPutSome                 = Mock.hPutSome
     , hTruncate                = Mock.hTruncate
     , hGetSize                 = Mock.hGetSize
@@ -64,15 +66,17 @@ pureHasFS = HasFS {
     , unsafeToFilePath         = \_ -> error "pureHasFS:unsafeToFilePath"
     }
 
-primHasFS :: Monad m => HasFS (FSSimT m) Mock.HandleMock
+primHasFS :: PrimMonad m => HasFS (FSSimT m) Mock.HandleMock
 primHasFS = HasFS {
       dumpState                = Mock.dumpState
     , hOpen                    = Mock.hOpen
     , hClose                   = Mock.hClose
     , hIsOpen                  = Mock.hIsOpen
     , hSeek                    = Mock.hSeek
-    , hGetSome                 = Mock.hGetSome
-    , hGetSomeAt               = Mock.hGetSomeAt
+    , hGetSome_                = Mock.hGetSome
+    , hGetBufSome              = Mock.hGetBufSome
+    , hGetSomeAt_              = Mock.hGetSomeAt
+    , hGetBufSomeAt            = Mock.hGetBufSomeAt
     , hPutSome                 = Mock.hPutSome
     , hTruncate                = Mock.hTruncate
     , hGetSize                 = Mock.hGetSize
@@ -90,9 +94,7 @@ primHasFS = HasFS {
 
 primHasBufFS :: PrimMonad m => HasBufFS (FSSimT m) Mock.HandleMock
 primHasBufFS = HasBufFS {
-      hGetBufSome   = Mock.hGetBufSome
-    , hGetBufSomeAt = Mock.hGetBufSomeAt
-    , hPutBufSome   = Mock.hPutBufSome
+      hPutBufSome   = Mock.hPutBufSome
     , hPutBufSomeAt = Mock.hPutBufSomeAt
     }
 

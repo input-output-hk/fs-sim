@@ -65,7 +65,7 @@ prop_roundtrip_hPutGetBufSome bs (Small c) =
       let writeTest = counterexample "wrote too many bytes" ((if c > 0 then 1 .<= m else property True) .&&. m .<= c)
       FS.hSeek hfs h FS.AbsoluteSeek 0
       getBuf <- newPinnedByteArray (fromIntegral m)
-      o <- FS.hGetBufSome hbfs h getBuf 0 m
+      o <- FS.hGetBufSome hfs h getBuf 0 m
       let readTest = counterexample "read too many bytes"   ((if c > 0 then 1 .<= o else property True) .&&. o .<= m)
       bs' <- toByteString (fromIntegral o) getBuf
       let cmpTest = counterexample "(prefix of) input and output bytestring do not match"
@@ -89,7 +89,7 @@ prop_roundtrip_hPutGetBufSomeAt bs (Small c) off =
       m <- FS.hPutBufSomeAt hbfs h putBuf 0 c off
       let writeTest = counterexample "wrote too many bytes" ((if c > 0 then 1 .<= m else property True) .&&. m .<= c)
       getBuf <- newPinnedByteArray (fromIntegral m)
-      o <- FS.hGetBufSomeAt hbfs h getBuf 0 m off
+      o <- FS.hGetBufSomeAt hfs h getBuf 0 m off
       let readTest = counterexample "read too many bytes"   ((if c > 0 then 1 .<= o else property True) .&&. o .<= m)
       bs' <- toByteString (fromIntegral o) getBuf
       let cmpTest = counterexample "(prefix of) input and output bytestring do not match"
@@ -114,7 +114,7 @@ prop_roundtrip_hPutGetBufExactly bs (Small c) =
       let writeTest = counterexample "wrote too few bytes" (m === c)
       FS.hSeek hfs h FS.AbsoluteSeek 0
       getBuf <- newPinnedByteArray (fromIntegral c)
-      o <- FS.hGetBufExactly hfs hbfs h getBuf 0 c
+      o <- FS.hGetBufExactly hfs h getBuf 0 c
       let readTest = counterexample "read too few byes"    (o === c)
       bs' <- toByteString (fromIntegral c) getBuf
       let cmpTest = counterexample "input and output bytestring do not match"
@@ -139,7 +139,7 @@ prop_roundtrip_hPutGetBufExactlyAt bs (Small c) off =
       m <- FS.hPutBufExactlyAt hbfs h putBuf 0 c off
       let writeTest = counterexample "wrote too few bytes" (m === c)
       getBuf <- newPinnedByteArray (fromIntegral c)
-      o <- FS.hGetBufExactlyAt hfs hbfs h getBuf 0 c off
+      o <- FS.hGetBufExactlyAt hfs h getBuf 0 c off
       let readTest = counterexample "read too few byes"    (o === c)
       bs' <- toByteString (fromIntegral c) getBuf
       let cmpTest = counterexample "input and output bytestring do not match"

@@ -8,12 +8,10 @@ module System.FS.Sim.STM (
     runSimFS
   , simHasFS
   , simHasFS'
-  , simHasBufFS
   ) where
 
 import           Control.Concurrent.Class.MonadSTM.Strict
 import           Control.Monad.Class.MonadThrow
-import           Control.Monad.Primitive
 
 import           System.FS.API
 
@@ -54,8 +52,10 @@ simHasFS var = HasFS {
     , hClose                   = sim  .  Mock.hClose
     , hIsOpen                  = sim  .  Mock.hIsOpen
     , hSeek                    = sim ..: Mock.hSeek
-    , hGetSome                 = sim  .: Mock.hGetSome
-    , hGetSomeAt               = sim ..: Mock.hGetSomeAt
+    , hGetSome_                = sim  .: Mock.hGetSome
+    , hGetBufSome              = undefined -- TODO
+    , hGetSomeAt_              = sim ..: Mock.hGetSomeAt
+    , hGetBufSomeAt            = undefined -- TODO
     , hPutSome                 = sim  .: Mock.hPutSome
     , hTruncate                = sim  .: Mock.hTruncate
     , hGetSize                 = sim  .  Mock.hGetSize
@@ -87,23 +87,3 @@ simHasFS var = HasFS {
 
     (..:) :: (y -> z) -> (x0 -> x1 -> x2 -> y) -> (x0 -> x1 -> x2 -> z)
     (f ..: g) x0 x1 x2 = f (g x0 x1 x2)
-
--- | Equip @m@ with a @HasBufFS@ instance using the mock file system
-simHasBufFS :: forall m. (MonadSTM m, MonadThrow m, PrimMonad m)
-            => StrictTMVar m MockFS
-            -> HasBufFS m HandleMock
-simHasBufFS var = HasBufFS {
-      hGetBufSome = \a b c d -> sim (Mock.hGetBufSome a b c d)
-    , hGetBufSomeAt = undefined
-    , hPutBufSome = undefined
-    , hPutBufSomeAt = undefined
-    }
-  where
-    sim :: FSSimT m a -> m a
-    sim m = do
-      st <- atomically $ takeTMVar var
-      runFSSimT m st >>= \case
-          Left e -> throwIO e
-          Right (a, st') -> do
-            atomically $ putTMVar var st'
-            return a

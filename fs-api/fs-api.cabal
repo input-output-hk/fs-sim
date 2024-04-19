@@ -24,7 +24,14 @@ source-repository head
   location: https://github.com/input-output-hk/fs-sim
   subdir:   fs-api
 
+common warnings
+  ghc-options:
+    -Wall -Wcompat -Wincomplete-uni-patterns
+    -Wincomplete-record-updates -Wpartial-fields -Widentities
+    -Wredundant-constraints -Wmissing-export-lists -Wunused-packages
+
 library
+  import:           warnings
   hs-source-dirs:   src
   exposed-modules:
     System.FS.API
@@ -69,12 +76,8 @@ library
     else
       hs-source-dirs: src-macos
 
-  ghc-options:
-    -Wall -Wcompat -Wincomplete-uni-patterns
-    -Wincomplete-record-updates -Wpartial-fields -Widentities
-    -Wredundant-constraints -Wmissing-export-lists -Wunused-packages
-
 test-suite fs-api-test
+  import:           warnings
   type:             exitcode-stdio-1.0
   hs-source-dirs:   test
   main-is:          Main.hs
@@ -89,8 +92,22 @@ test-suite fs-api-test
     , tasty-quickcheck
     , temporary
 
-  ghc-options:
-    -Wall -Wcompat -Wincomplete-uni-patterns
-    -Wincomplete-record-updates -Wpartial-fields -Widentities
-    -Wredundant-constraints -Wmissing-export-lists -Wunused-packages
-    -fno-ignore-asserts
+  ghc-options:      -fno-ignore-asserts
+
+benchmark fs-api-bench
+  import:           warnings
+  type:             exitcode-stdio-1.0
+  hs-source-dirs:   bench
+  main-is:          Main.hs
+  default-language: Haskell2010
+  build-depends:
+    , base
+    , bytestring
+    , criterion
+    , deepseq
+    , directory
+    , fs-api
+    , random
+    , temporary
+
+  ghc-options:      -rtsopts -with-rtsopts=-T

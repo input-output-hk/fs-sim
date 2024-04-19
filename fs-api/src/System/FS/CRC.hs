@@ -18,6 +18,7 @@ module System.FS.CRC (
 
 import           Control.Monad (foldM)
 import           Control.Monad.Class.MonadThrow
+import           Control.Monad.Primitive (PrimMonad)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import           Data.Coerce
@@ -65,7 +66,7 @@ hPutAllCRC hasFS h = foldM putChunk (0, initCRC) . BL.toChunks
       return (written', crc')
 
 -- | Variation on 'hGetExactlyAt' that also computes a CRC
-hGetExactlyAtCRC :: forall m h. (HasCallStack, MonadThrow m)
+hGetExactlyAtCRC :: forall m h. (HasCallStack, MonadThrow m, PrimMonad m)
                  => HasFS m h
                  -> Handle h
                  -> Word64    -- ^ The number of bytes to read.
@@ -79,7 +80,7 @@ hGetExactlyAtCRC hasFS h n offset = do
     return (bs, crc)
 
 -- | Variation on 'hGetAllAt' that also computes a CRC
-hGetAllAtCRC :: forall m h. Monad m
+hGetAllAtCRC :: forall m h. PrimMonad m
              => HasFS m h
              -> Handle h
              -> AbsOffset -- ^ The offset at which to read.

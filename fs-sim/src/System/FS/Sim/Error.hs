@@ -419,8 +419,10 @@ mkSimErrorHasFS fsVar errorsVar =
         , hSeek      = \h m n ->
             withErr' errorsVar h (hSeek h m n) "hSeek"
             hSeekE (\e es -> es { hSeekE = e })
-        , hGetSome   = hGetSome' errorsVar hGetSome
-        , hGetSomeAt = hGetSomeAt' errorsVar hGetSomeAt
+        , hGetSome_   = hGetSome' errorsVar hGetSome_
+        , hGetBufSome = undefined -- TODO
+        , hGetSomeAt_ = hGetSomeAt' errorsVar hGetSomeAt_
+        , hGetBufSomeAt = undefined -- TODO
         , hPutSome   = hPutSome' errorsVar hPutSome
         , hTruncate  = \h w ->
             withErr' errorsVar h (hTruncate h w) "hTruncate"

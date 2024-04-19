@@ -15,6 +15,7 @@ module System.FS.API.Lazy (
 
 import           Control.Monad (foldM)
 import           Control.Monad.Class.MonadThrow (MonadThrow (throwIO))
+import           Control.Monad.Primitive
 import qualified Data.ByteString as BS
 import           Data.ByteString.Builder (Builder)
 import qualified Data.ByteString.Builder as BS
@@ -26,7 +27,7 @@ import           Util.CallStack (HasCallStack, prettyCallStack)
 
 -- | Makes sure it reads all requested bytes.
 -- If eof is found before all bytes are read, it throws an exception.
-hGetExactly :: forall m h. (HasCallStack, MonadThrow m)
+hGetExactly :: forall m h. (HasCallStack, MonadThrow m, PrimMonad m)
             => HasFS m h
             -> Handle h
             -> Word64
@@ -52,7 +53,7 @@ hGetExactly hasFS h n = go n []
 
 -- | Like 'hGetExactly', but is thread safe since it does not change or depend
 -- on the file offset. @pread@ syscall is used internally.
-hGetExactlyAt :: forall m h. (HasCallStack, MonadThrow m)
+hGetExactlyAt :: forall m h. (HasCallStack, MonadThrow m, PrimMonad m)
               => HasFS m h
               -> Handle h
               -> Word64    -- ^ The number of bytes to read.
@@ -83,12 +84,12 @@ hGetExactlyAt hasFS h n offset = go n offset []
 -- | Read all the data from the given file handle 64kB at a time.
 --
 -- Stops when EOF is reached.
-hGetAll :: Monad m => HasFS m h -> Handle h -> m BL.ByteString
-hGetAll HasFS{..} hnd = go mempty
+hGetAll :: PrimMonad m => HasFS m h -> Handle h -> m BL.ByteString
+hGetAll hfs hnd = go mempty
   where
     bufferSize = 64 * 1024
     go acc = do
-      chunk <- hGetSome hnd bufferSize
+      chunk <- hGetSome hfs hnd bufferSize
       let acc' = chunk : acc
       if BS.null chunk
         then return $ BL.fromChunks $ reverse acc'
@@ -96,16 +97,16 @@ hGetAll HasFS{..} hnd = go mempty
 
 -- | Like 'hGetAll', but is thread safe since it does not change or depend
 -- on the file offset. @pread@ syscall is used internally.
-hGetAllAt :: Monad m
+hGetAllAt :: PrimMonad m
           => HasFS m h
           -> Handle h
           -> AbsOffset -- ^ The offset at which to read.
           -> m BL.ByteString
-hGetAllAt HasFS{..} hnd = go mempty
+hGetAllAt hfs hnd = go mempty
   where
     bufferSize = 64 * 1024
     go acc offset = do
-      chunk <- hGetSomeAt hnd bufferSize offset
+      chunk <- hGetSomeAt hfs hnd bufferSize offset
       let acc' = chunk : acc
       if BS.null chunk
         then return $ BL.fromChunks $ reverse acc'

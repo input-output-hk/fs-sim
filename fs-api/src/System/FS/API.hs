@@ -3,15 +3,19 @@
 {-# LANGUAGE DerivingVia                #-}
 {-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE GeneralisedNewtypeDeriving #-}
+{-# LANGUAGE MagicHash                  #-}
 {-# LANGUAGE NamedFieldPuns             #-}
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE StandaloneKindSignatures   #-}
 
 -- | An abstract view over the filesystem.
 module System.FS.API (
     -- * Record that abstracts over the filesystem
     HasFS (..)
+  , hGetSome
+  , hGetSomeAt
     -- * Types
   , module Types
     -- * Opening and closing files
@@ -31,20 +35,27 @@ module System.FS.API (
 import           Control.Monad.Class.MonadThrow
 import           Control.Monad.Primitive (PrimMonad (..))
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Internal as BS.Internal
 import           Data.Int (Int64)
-import           Data.Primitive (MutableByteArray)
+import           Data.Kind (Type)
+import           Data.Primitive
 import           Data.Set (Set)
 import           Data.Word
-import           System.Posix.Types (ByteCount)
+import qualified Foreign
+import qualified GHC.Exts as GHC
+import qualified GHC.ForeignPtr as GHC
+import           System.IO.Unsafe (unsafeDupablePerformIO)
+import           System.Posix.Types (ByteCount, Fd)
 
 import           System.FS.API.Types as Types
-
+import           System.FS.IO.Internal.Handle (HandleOS)
 import           Util.CallStack
 
 {------------------------------------------------------------------------------
   Record that abstracts over the filesystem
 ------------------------------------------------------------------------------}
 
+type HasFS :: (Type -> Type) -> Type -> Type
 data HasFS m h = HasFS {
     -- | Debugging: human-readable description of file system state
     dumpState                :: m String
@@ -70,7 +81,7 @@ data HasFS m h = HasFS {
     -- and we don't want to emulate it's behaviour.
   , hSeek                    :: HasCallStack => Handle h -> SeekMode -> Int64 -> m ()
 
-    -- | Try to read @n@ bytes from a handle
+   -- | Try to read @n@ bytes from a handle
     --
     -- When at the end of the file, an empty bytestring will be returned.
     --
@@ -81,18 +92,33 @@ data HasFS m h = HasFS {
     --
     -- Postcondition: for the length of the returned bytestring @bs@ we have
     -- @length bs >= 0@ and @length bs <= n@.
-  , hGetSome                 :: HasCallStack => Handle h -> Word64 -> m BS.ByteString
+  , hGetSome_                 :: HasCallStack => Handle h -> Word64 -> m BS.ByteString
+
+  , hGetBufSome      :: HasCallStack
+                     => Handle h
+                     -> MutableByteArray (PrimState m) -- ^ Buffer to read bytes into
+                     -> BufferOffset -- ^ Offset into buffer
+                     -> ByteCount -- ^ The number of bytes to read
+                     -> m ByteCount
 
     -- | Same as 'hGetSome', but does not affect the file offset. An additional argument
     -- is used to specify the offset. This allows it to be called concurrently for the
     -- same file handle. However, the actual level of parallelism achieved depends on
     -- the implementation and the operating system: generally on Unix it will be
     -- \"more parallel\" than on Windows.
-  , hGetSomeAt               :: HasCallStack
+  , hGetSomeAt_              :: HasCallStack
                              => Handle h
                              -> Word64    -- The number of bytes to read.
                              -> AbsOffset -- The offset at which to read.
                              -> m BS.ByteString
+
+  , hGetBufSomeAt    :: HasCallStack
+                     => Handle h
+                     -> MutableByteArray (PrimState m)   -- ^ Buffer to read bytes into
+                     -> BufferOffset -- ^ Offset into buffer
+                     -> ByteCount -- ^ The number of bytes to read
+                     -> AbsOffset -- ^ The file offset at which to read
+                     -> m ByteCount
 
     -- | Write to a handle
     --
@@ -189,6 +215,81 @@ data SomeHasFS m where
   SomeHasFS :: Eq h => HasFS m h -> SomeHasFS m
 
 {-------------------------------------------------------------------------------
+  Compound functions
+-------------------------------------------------------------------------------}
+
+{-# SPECIALISE hGetSome ::
+     HasCallStack
+  => HasFS IO (HandleOS Fd)
+  -> Handle (HandleOS Fd)
+  -> Word64
+  -> IO BS.ByteString
+  #-}
+{-# INLINABLE hGetSome #-}
+hGetSome ::
+     (HasCallStack, PrimMonad m)
+  => HasFS m h
+  -> Handle h
+  -> Word64
+  -> m BS.ByteString
+hGetSome hfs !h !c = do
+    !buf <- newPinnedByteArray (fromIntegral c)
+    !c' <- hGetBufSome hfs h buf 0 (fromIntegral c)
+    ba <- unsafeFreezeByteArray buf
+    -- pure $ copyByteArrayToByteString ba 0 (fromIntegral c')
+    pure $! unsafeByteArrayToByteString ba (fromIntegral c')
+
+{-# SPECIALISE hGetSomeAt ::
+     HasCallStack
+  => HasFS IO (HandleOS Fd)
+  -> Handle (HandleOS Fd)
+  -> Word64
+  -> AbsOffset
+  -> IO BS.ByteString
+  #-}
+{-# INLINABLE hGetSomeAt #-}
+hGetSomeAt ::
+     (HasCallStack, PrimMonad m)
+  => HasFS m h
+  -> Handle h
+  -> Word64
+  -> AbsOffset
+  -> m BS.ByteString
+hGetSomeAt hfs !h !c !off = do
+    !buf <- newPinnedByteArray (fromIntegral c)
+    !c' <- hGetBufSomeAt hfs h buf 0 (fromIntegral c) off
+    ba <- unsafeFreezeByteArray buf
+    -- pure $ copyByteArrayToByteString ba 0 (fromIntegral c')
+    pure $! unsafeByteArrayToByteString ba (fromIntegral c')
+
+{-# INLINE unsafeByteArrayToByteString #-}
+unsafeByteArrayToByteString :: ByteArray -> Int -> BS.Internal.ByteString
+unsafeByteArrayToByteString !ba !len =
+    unsafeDupablePerformIO $ do
+      let !(GHC.Ptr addr#) = byteArrayContents ba
+      (MutableByteArray mba#) <- unsafeThawByteArray ba
+      let fp = GHC.ForeignPtr addr# (GHC.PlainPtr mba#)
+      BS.Internal.mkDeferredByteString fp len
+
+-- | Copy a 'Prim.ByteArray' at a certain offset and length into a
+-- 'BS.ByteString'.
+--
+-- TODO: copied from cborg
+_copyByteArrayToByteString :: ByteArray
+                          -- ^ 'Prim.ByteArray' to copy from.
+                          -> Int
+                          -- ^ Offset into the 'Prim.ByteArray' to start with.
+                          -> Int
+                          -- ^ Length of the data to copy.
+                          -> BS.ByteString
+_copyByteArrayToByteString ba off len =
+    unsafeDupablePerformIO $ do
+      fp <- BS.Internal.mallocByteString len
+      Foreign.withForeignPtr fp $ \ptr -> do
+        copyByteArrayToPtr ptr ba off len
+        return (BS.Internal.PS fp 0 len)
+
+{-------------------------------------------------------------------------------
   HasBufFS
 -------------------------------------------------------------------------------}
 
@@ -210,26 +311,9 @@ newtype BufferOffset = BufferOffset { unBufferOffset :: Int }
 -- Note: this interface is likely going to become part of the 'HasFS' interface,
 -- but is separated for now so downstream code does not break.
 data HasBufFS m h = HasBufFS {
-    -- | Like 'hGetSome', but the bytes are read into a user-supplied buffer.
-    -- See __User-supplied buffers__.
-    hGetBufSome      :: HasCallStack
-                     => Handle h
-                     -> MutableByteArray (PrimState m) -- ^ Buffer to read bytes into
-                     -> BufferOffset -- ^ Offset into buffer
-                     -> ByteCount -- ^ The number of bytes to read
-                     -> m ByteCount
-    -- | Like 'hGetSomeAt', but the bytes are read into a user-supplied buffer.
-    -- See __User-supplied buffers__.
-  , hGetBufSomeAt    :: HasCallStack
-                     => Handle h
-                     -> MutableByteArray (PrimState m)   -- ^ Buffer to read bytes into
-                     -> BufferOffset -- ^ Offset into buffer
-                     -> ByteCount -- ^ The number of bytes to read
-                     -> AbsOffset -- ^ The file offset at which to read
-                     -> m ByteCount
     -- | Like 'hPutSome', but the bytes are written from a user-supplied buffer.
     -- See __User-supplied buffers__.
-  , hPutBufSome      :: HasCallStack
+    hPutBufSome      :: HasCallStack
                      => Handle h
                      -> MutableByteArray (PrimState m) -- ^ Buffer to write bytes from
                      -> BufferOffset -- ^ Offset into buffer
@@ -252,19 +336,18 @@ data HasBufFS m h = HasBufFS {
 -- read, an 'FsError' exception is thrown.
 hGetBufExactly :: forall m h. (HasCallStack, MonadThrow m)
                => HasFS m h
-               -> HasBufFS m h
                -> Handle h
                -> MutableByteArray (PrimState m) -- ^ Buffer to read bytes into
                -> BufferOffset -- ^ Offset into buffer
                -> ByteCount  -- ^ The number of bytes to read
                -> m ByteCount
-hGetBufExactly hfs hbfs h buf bufOff c = go c bufOff
+hGetBufExactly hfs h buf bufOff c = go c bufOff
   where
     go :: ByteCount -> BufferOffset -> m ByteCount
     go !remainingCount !currentBufOff
       | remainingCount == 0 = pure c
       | otherwise            = do
-          readBytes <- hGetBufSome hbfs h buf currentBufOff c
+          readBytes <- hGetBufSome hfs h buf currentBufOff c
           if readBytes == 0 then
             throwIO FsError {
                 fsErrorType   = FsReachedEOF
@@ -283,20 +366,19 @@ hGetBufExactly hfs hbfs h buf bufOff c = go c bufOff
 -- an 'FsError' exception is thrown.
 hGetBufExactlyAt :: forall m h. (HasCallStack, MonadThrow m)
                  => HasFS m h
-                 -> HasBufFS m h
                  -> Handle h
                  -> MutableByteArray (PrimState m)   -- ^ Buffer to read bytes into
                  -> BufferOffset -- ^ Offset into buffer
                  -> ByteCount -- ^ The number of bytes to read
                  -> AbsOffset -- ^ The file offset at which to read
                  -> m ByteCount
-hGetBufExactlyAt hfs hbfs h buf bufOff c off = go c off bufOff
+hGetBufExactlyAt hfs h buf bufOff c off = go c off bufOff
   where
     go :: ByteCount -> AbsOffset -> BufferOffset -> m ByteCount
     go !remainingCount !currentOffset !currentBufOff
       | remainingCount == 0 = pure c
       | otherwise            = do
-          readBytes <- hGetBufSomeAt hbfs h buf currentBufOff c currentOffset
+          readBytes <- hGetBufSomeAt hfs h buf currentBufOff c currentOffset
           if readBytes == 0 then
             throwIO FsError {
                 fsErrorType   = FsReachedEOF
