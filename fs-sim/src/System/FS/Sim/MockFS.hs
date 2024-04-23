@@ -1,5 +1,4 @@
 {-# LANGUAGE ConstraintKinds            #-}
-{-# LANGUAGE DeriveAnyClass             #-}
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE DerivingStrategies         #-}
@@ -9,6 +8,7 @@
 {-# LANGUAGE MultiWayIf                 #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE RecordWildCards            #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE TupleSections              #-}
 
 -- | Mock file system implementation
@@ -55,11 +55,19 @@ module System.FS.Sim.MockFS (
     -- * opaque
   , HandleMock
   , MockFS
+    -- * HasBufFS
+  , fromBuffer
+  , intoBuffer
+  , hGetBufSome
+  , hGetBufSomeAt
+  , hPutBufSome
+  , hPutBufSomeAt
   ) where
 
-import           Control.Monad (unless, void, when)
+import           Control.Monad (forM, forM_, unless, void, when)
 import           Control.Monad.Except (MonadError, throwError)
-import           Control.Monad.State (MonadState, get, gets, put)
+import           Control.Monad.Primitive (PrimMonad (..))
+import           Control.Monad.State.Strict (MonadState, get, gets, put)
 import           Data.Bifunctor
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
@@ -68,12 +76,16 @@ import           Data.Int (Int64)
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import           Data.Maybe (mapMaybe)
+import qualified Data.Primitive as P
+import           Data.Primitive.ByteArray
 import           Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as Text
-import           Data.Word (Word64)
+import           Data.Word (Word64, Word8)
 import           GHC.Generics (Generic)
+import           System.Posix.Types (ByteCount)
 
+import           System.FS.API (BufferOffset (..))
 import           System.FS.API.Types
 import           Util.CallStack
 
@@ -610,36 +622,6 @@ hPutSome h toWrite =
                        , fsLimitation  = False
                        }
 
-    -- Given
-    --
-    -- >        A        B         C
-    -- > |-----------|-------.-----------|
-    -- >             n       .
-    -- >                     .
-    -- >                 D   .
-    -- >             |-------|
-    --
-    -- return A <> D <> C
-    replace :: Word64 -> ByteString -> ByteString -> ByteString
-    replace n d abc = a <> d <> c
-      where
-        (a, c) = snip (fromIntegral n) (BS.length d) abc
-
-    -- Given
-    --
-    -- >       A         B         C
-    -- > |-----------|-------|-----------|
-    -- >             n
-    -- >             <------->
-    -- >                 m
-    --
-    -- return (A, C)
-    snip :: Int -> Int -> ByteString -> (ByteString, ByteString)
-    snip n m bs = (a, c)
-      where
-        (a, bc) = BS.splitAt n bs
-        c       = BS.drop m bc
-
 -- | Truncate a file
 --
 -- NOTE: Differences from Posix:
@@ -905,3 +887,235 @@ sign a | a < 0     = Negative (negate a)
 
 sign64 :: Int64 -> Sign Word64
 sign64 = fmap fromIntegral . sign
+
+{-------------------------------------------------------------------------------
+  ByteString
+-------------------------------------------------------------------------------}
+
+-- Given
+--
+-- >        A        B         C
+-- > |-----------|-------.-----------|
+-- >             n       .
+-- >                     .
+-- >                 D   .
+-- >             |-------|
+--
+-- return A <> D <> C
+replace :: Word64 -> ByteString -> ByteString -> ByteString
+replace n d abc = a <> d <> c
+  where
+    (a, c) = snip (fromIntegral n) (BS.length d) abc
+
+-- Given
+--
+-- >       A         B         C
+-- > |-----------|-------|-----------|
+-- >             n
+-- >             <------->
+-- >                 m
+--
+-- return (A, C)
+snip :: Int -> Int -> ByteString -> (ByteString, ByteString)
+snip n m bs = (a, c)
+  where
+    (a, bc) = BS.splitAt n bs
+    c       = BS.drop m bc
+
+{-------------------------------------------------------------------------------
+  HasBufFS
+-------------------------------------------------------------------------------}
+
+packMutableByteArray :: PrimMonad m => P.MutableByteArray (PrimState m) -> BufferOffset -> [Word8] -> m ()
+packMutableByteArray mba i bytes = forM_ (zip [unBufferOffset i..] bytes) $ uncurry (P.writeByteArray mba)
+
+intoBuffer :: PrimMonad m => P.MutableByteArray (PrimState m) -> BufferOffset -> ByteString -> m Bool
+intoBuffer buf bufOff bs = do
+    bufSize <- P.getSizeofMutableByteArray buf
+    let remaining = bufSize - unBufferOffset bufOff
+    if BS.length bs >  remaining
+      then pure False
+      else packMutableByteArray buf bufOff (BS.unpack bs)
+        >> pure True
+
+unpackMutableByteArray :: PrimMonad m => P.MutableByteArray (PrimState m) -> BufferOffset -> ByteCount -> m [Word8]
+unpackMutableByteArray mba i c = forM [unBufferOffset i .. unBufferOffset i + fromIntegral c - 1] $ P.readByteArray mba
+
+fromBuffer :: PrimMonad m => P.MutableByteArray (PrimState m) -> BufferOffset -> ByteCount -> m (Maybe ByteString)
+fromBuffer buf bufOff c = do
+  bufSize <- P.getSizeofMutableByteArray buf
+  let remaining = bufSize - unBufferOffset bufOff
+  if fromIntegral c > remaining
+    then pure Nothing
+    else Just . BS.pack <$> unpackMutableByteArray buf bufOff c
+
+hGetBufSome :: (CanSimFS m, PrimMonad m) => Handle' -> MutableByteArray (PrimState m) -> BufferOffset -> ByteCount -> m ByteCount
+hGetBufSome h buf bufOff n =
+    withOpenHandleRead h $ \fs hs@OpenHandle{..} -> do
+      file <- checkFsTree $ FS.getFile openFilePath (mockFiles fs)
+      case openPtr  of
+        RW r w o -> do
+          unless r $ throwError (errNoReadAccess openFilePath "write")
+          let bs = BS.take (fromIntegral n) . BS.drop (fromIntegral o) $ file
+          success <- intoBuffer buf bufOff bs
+          -- we can't read more bytes than the buffer size
+          unless success $ throwError (errWritePastBufEnd openFilePath)
+          let readBytes = fromIntegral (BS.length bs)
+          return (readBytes, hs { openPtr = RW True w (o + fromIntegral readBytes)})
+        Append -> throwError (errNoReadAccess openFilePath "append")
+  where
+    errNoReadAccess fp mode = FsError {
+        fsErrorType   = FsInvalidArgument
+      , fsErrorPath   = fsToFsErrorPathUnmounted fp
+      , fsErrorString = "cannot hGetBufSomeAt in " <> mode <> " mode"
+      , fsErrorNo     = Nothing
+      , fsErrorStack  = prettyCallStack
+      , fsLimitation  = True
+      }
+
+    errWritePastBufEnd fp = FsError {
+        fsErrorType   = FsInvalidArgument
+      , fsErrorPath   = fsToFsErrorPathUnmounted fp
+      , fsErrorString = "hPutBufSomeAt: writing into buffer past end not supported"
+      , fsErrorNo     = Nothing
+      , fsErrorStack  = prettyCallStack
+      , fsLimitation  = True
+      }
+
+hGetBufSomeAt :: (CanSimFS m, PrimMonad m) => Handle' -> MutableByteArray (PrimState m) -> BufferOffset -> ByteCount -> AbsOffset -> m ByteCount
+hGetBufSomeAt h buf bufOff n o =
+    withOpenHandleRead h $ \fs hs@OpenHandle{..} -> do
+      file <- checkFsTree $ FS.getFile openFilePath (mockFiles fs)
+      let o' = unAbsOffset o
+      let fsize = fromIntegral (BS.length file) :: Word64
+      case openPtr  of
+        RW r _ _ -> do
+          unless r $ throwError (errNoReadAccess openFilePath "write")
+          -- This is the same fsLimitation we get when we seek past the end of
+          -- EOF, in AbsoluteSeek mode.
+          when (o' > fsize) $ throwError (errPastEnd openFilePath)
+          let bs = BS.take (fromIntegral n) . BS.drop (fromIntegral o') $ file
+          success <- intoBuffer buf bufOff bs
+          -- we can't read more bytes than the buffer size
+          unless success $ throwError (errWritePastBufEnd openFilePath)
+          return (fromIntegral (BS.length bs), hs)
+        Append -> throwError (errNoReadAccess openFilePath "append")
+  where
+    errNoReadAccess fp mode = FsError {
+        fsErrorType   = FsInvalidArgument
+      , fsErrorPath   = fsToFsErrorPathUnmounted fp
+      , fsErrorString = "cannot hGetBufSomeAt in " <> mode <> " mode"
+      , fsErrorNo     = Nothing
+      , fsErrorStack  = prettyCallStack
+      , fsLimitation  = True
+      }
+
+    errPastEnd fp = FsError {
+        fsErrorType   = FsInvalidArgument
+      , fsErrorPath   = fsToFsErrorPathUnmounted fp
+      , fsErrorString = "hGetBufSomeAt offset past EOF not supported"
+      , fsErrorNo     = Nothing
+      , fsErrorStack  = prettyCallStack
+      , fsLimitation  = True
+      }
+
+    errWritePastBufEnd fp = FsError {
+        fsErrorType   = FsInvalidArgument
+      , fsErrorPath   = fsToFsErrorPathUnmounted fp
+      , fsErrorString = "hPutBufSomeAt: writing into buffer past end not supported"
+      , fsErrorNo     = Nothing
+      , fsErrorStack  = prettyCallStack
+      , fsLimitation  = True
+      }
+
+hPutBufSome :: (CanSimFS m, PrimMonad m) => Handle' -> MutableByteArray (PrimState m) -> BufferOffset -> ByteCount -> m ByteCount
+hPutBufSome h buf bufOff n = do
+    withOpenHandleModify h $ \fs hs@OpenHandle{..} -> do
+      file <- checkFsTree $ FS.getFile openFilePath (mockFiles fs)
+      case openPtr of
+        RW r w o -> do
+          unless w $ throwError (errNoWriteAccess openFilePath "read")
+          -- We can't write more bytes than the buffer size
+          toWrite <- fromBuffer buf bufOff  n >>= \case
+            Nothing -> throwError (errReadPastBufEnd openFilePath)
+            Just bs -> pure bs
+          let file' = replace o toWrite file
+          files' <- checkFsTree $ FS.replace openFilePath file' (mockFiles fs)
+          let written = fromIntegral $ BS.length toWrite
+          return (written, (files', hs { openPtr = RW r w (o + fromIntegral written)}))
+        Append -> do
+          -- We can't write more bytes than the buffer size
+          toWrite <- fromBuffer buf bufOff n >>= \case
+            Nothing -> throwError (errReadPastBufEnd openFilePath)
+            Just bs -> pure bs
+          let file' = file <> toWrite
+          files' <- checkFsTree $ FS.replace openFilePath file' (mockFiles fs)
+          let written = fromIntegral $ BS.length toWrite
+          return (written, (files', hs))
+  where
+    errNoWriteAccess fp mode = FsError {
+        fsErrorType   = FsInvalidArgument
+      , fsErrorPath   = fsToFsErrorPathUnmounted fp
+      , fsErrorString = "cannot hPutBufSomeAt in " <> mode <> " mode"
+      , fsErrorNo     = Nothing
+      , fsErrorStack  = prettyCallStack
+      , fsLimitation  = True
+      }
+
+    errReadPastBufEnd fp = FsError {
+        fsErrorType   = FsInvalidArgument
+      , fsErrorPath   = fsToFsErrorPathUnmounted fp
+      , fsErrorString = "hPutBufSomeAt: reading from buffer past end not supported"
+      , fsErrorNo     = Nothing
+      , fsErrorStack  = prettyCallStack
+      , fsLimitation  = True
+      }
+
+hPutBufSomeAt :: (CanSimFS m, PrimMonad m) => Handle' -> MutableByteArray (PrimState m) -> BufferOffset -> ByteCount -> AbsOffset -> m ByteCount
+hPutBufSomeAt h buf bufOff n o = do
+    withOpenHandleModify h $ \fs hs@OpenHandle{..} -> do
+      file <- checkFsTree $ FS.getFile openFilePath (mockFiles fs)
+      let o'    = unAbsOffset o
+      let fsize = fromIntegral (BS.length file)
+      case openPtr of
+        RW _ w _ -> do
+          unless w $ throwError (errNoWriteAccess openFilePath "read")
+          -- This is the same fsLimitation we get when we seek past the end of
+          -- EOF, in AbsoluteSeek mode.
+          when (o' > fsize) $ throwError (errPastEnd openFilePath)
+          -- We can't write more bytes than the buffer size
+          toWrite <- fromBuffer buf bufOff n >>= \case
+            Nothing -> throwError (errReadPastBufEnd openFilePath)
+            Just bs -> pure bs
+          let file' = replace o' toWrite file
+          files' <- checkFsTree $ FS.replace openFilePath file' (mockFiles fs)
+          let written = fromIntegral $ BS.length toWrite
+          return (written, (files', hs))
+        Append -> throwError (errNoWriteAccess openFilePath "append")
+  where
+    errNoWriteAccess fp mode = FsError {
+        fsErrorType   = FsInvalidArgument
+      , fsErrorPath   = fsToFsErrorPathUnmounted fp
+      , fsErrorString = "cannot hPutBufSomeAt in " <> mode <> " mode"
+      , fsErrorNo     = Nothing
+      , fsErrorStack  = prettyCallStack
+      , fsLimitation  = True
+      }
+
+    errPastEnd fp = FsError {
+        fsErrorType   = FsInvalidArgument
+      , fsErrorPath   = fsToFsErrorPathUnmounted fp
+      , fsErrorString = "hPutBufSomeAt offset past EOF not supported"
+      , fsErrorNo     = Nothing
+      , fsErrorStack  = prettyCallStack
+      , fsLimitation  = True
+      }
+
+    errReadPastBufEnd fp = FsError {
+        fsErrorType   = FsInvalidArgument
+      , fsErrorPath   = fsToFsErrorPathUnmounted fp
+      , fsErrorString = "hPutBufSomeAt: reading from buffer past end not supported"
+      , fsErrorNo     = Nothing
+      , fsErrorStack  = prettyCallStack
+      , fsLimitation  = True
+      }

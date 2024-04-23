@@ -1,8 +1,11 @@
 # Revision history for fs-sim
 
-## next release -- ????-??-??
+## next version -- ????-??-??
+
+### Breaking
 
 * Orphan `Show` instance for `Foreign.C.Error.Errno` removed by `fs-api`.
+* New `primitive ^>=0.9` dependency
 
 ## 0.2.1.1 -- 2023-10-30
 

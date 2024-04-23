@@ -1,5 +1,5 @@
+{-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications    #-}
 
 -- | 'HasFS' instance using 'MockFS' stored in an STM variable
 module System.FS.Sim.STM (
@@ -15,7 +15,7 @@ import           System.FS.API
 
 import qualified System.FS.Sim.MockFS as Mock
 import           System.FS.Sim.MockFS (HandleMock, MockFS)
-import           System.FS.Sim.Pure (PureSimFS, runPureSimFS)
+import           System.FS.Sim.Prim
 
 {------------------------------------------------------------------------------
   The simulation-related types
@@ -67,11 +67,11 @@ simHasFS var = HasFS {
     , unsafeToFilePath         = \_ -> error "simHasFS:unsafeToFilePath"
     }
   where
-    sim :: PureSimFS a -> m a
+    sim :: FSSim a -> m a
     sim m = do
       eOrA <- atomically $ do
         st <- readTVar var
-        case runPureSimFS m st of
+        case runFSSim m st of
           Left e -> return $ Left e
           Right (a, st') -> do
             writeTVar var st'
