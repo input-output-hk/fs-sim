@@ -4,6 +4,7 @@
 {-# LANGUAGE DerivingVia                #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE RecordWildCards            #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE StandaloneDeriving         #-}
 
 -- For Show Errno and Condense SeekMode instances
@@ -55,6 +56,7 @@ import           Foreign.C.Error (Errno (..))
 import qualified Foreign.C.Error as C
 import           GHC.Generics (Generic)
 import qualified GHC.IO.Exception as GHC
+import           GHC.Show (showCommaSpace)
 import           System.FilePath
 import           System.IO (SeekMode (..))
 import qualified System.IO.Error as IO
@@ -224,9 +226,39 @@ data FsError = FsError {
       -- would not have thrown an error for these calls.
     , fsLimitation  :: Bool
     }
-  deriving Show
 
-deriving instance Show Errno
+-- This is a custom instance and not an auto-derive one, since 'Errno' does not
+-- have a 'Show' instance, and we don't want to provide an orphan instance for
+-- this @base@ type.
+instance Show FsError where
+  showsPrec n fserr = showParen (n >= 11) $
+        showString "FsError {"
+      . showString "fsErrorType = " . shows fsErrorType . showCommaSpace
+      . showString "fsErrorPath = " . shows fsErrorPath . showCommaSpace
+      . showString "fsErrorString = " . shows fsErrorString . showCommaSpace
+      . showString "fsErrorNo = " . showsFsErrNo fsErrorNo . showCommaSpace
+      . showString "fsErrorStack = " . shows fsErrorStack . showCommaSpace
+      . showString "fsLimitation = " . shows fsLimitation
+      . showString "}"
+    where
+      -- Quite a bit of boilerplate, but it should ensure that we won't silently
+      -- change/forget to change the Show instance when fields are
+      -- changed/re-ordered/added.
+      FsError {
+          fsErrorType = fsErrorType :: FsErrorType
+        , fsErrorPath = fsErrorPath :: FsErrorPath
+        , fsErrorString = fsErrorString :: String
+        , fsErrorNo = fsErrorNo :: Maybe Errno
+        , fsErrorStack = fsErrorStack :: PrettyCallStack
+        , fsLimitation = fsLimitation :: Bool
+        } = fserr
+      _coveredAllCases = case fserr of
+        FsError (_ :: FsErrorType) (_ :: FsErrorPath) (_ :: String)
+                (_ :: Maybe Errno) (_ :: PrettyCallStack) (_ :: Bool) -> ()
+
+      showsFsErrNo Nothing          = showString "Nothing"
+      showsFsErrNo (Just (Errno e)) = showString "Just "
+                                    . showParen True (showString "Errno " . shows e)
 
 data FsErrorType
   = FsIllegalOperation
