@@ -5,6 +5,7 @@
 ### Breaking
 
 * New `primitive ^>=0.9` dependency
+* Remove orphan `Show` instance for `Foreign.C.Error.Errno`.
 
 ### Non-breaking
 
