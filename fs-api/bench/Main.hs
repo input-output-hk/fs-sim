@@ -23,10 +23,10 @@ import           Data.List (unfoldr)
 import           Data.Primitive.ByteArray
 import           Data.Word (Word64)
 import           Foreign (withForeignPtr)
+import qualified GHC.Exts as GHC
 import qualified GHC.ForeignPtr as GHC
 import           GHC.Generics (Generic)
 import qualified GHC.IO as GHC
-import qualified GHC.Ptr as GHC
 import           GHC.Stack (HasCallStack)
 import qualified System.Directory as Dir
 import qualified System.FS.API as FS
@@ -104,7 +104,7 @@ unsafeByteArrayToByteString !ba !len =
       let !(GHC.Ptr addr#) = byteArrayContents ba
       (MutableByteArray mba#) <- unsafeThawByteArray ba
       let fp = GHC.ForeignPtr addr# (GHC.PlainPtr mba#)
-      BS.mkDeferredByteString fp len
+      pure $! BS.BS fp len
 
 -- | Copy a 'Prim.ByteArray' at a certain offset and length into a
 -- 'BS.ByteString'.
