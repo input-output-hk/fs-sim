@@ -6,6 +6,14 @@
 
 * Orphan `Show` instance for `Foreign.C.Error.Errno` removed by `fs-api`.
 * New `primitive ^>=0.9` dependency
+* New `safe-wild-cards^>=1.0`dependency
+
+### Patch
+
+* `allNull` was not actually checking whether all streams in the argument
+  `Errors` are empty.
+* The `Show Errors` instance was not printing every stream.
+* The shrinker for `Errors` was not shrinking every stream.
 
 ## 0.2.1.1 -- 2023-10-30
 
