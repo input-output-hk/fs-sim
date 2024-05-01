@@ -1,5 +1,4 @@
-{-# LANGUAGE CPP            #-}
-{-# LANGUAGE PackageImports #-}
+{-# LANGUAGE CPP #-}
 
 -- | This is meant to be used for the implementation of HasFS instances and not
 -- directly by client code.
