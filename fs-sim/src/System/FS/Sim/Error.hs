@@ -2,6 +2,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TemplateHaskell       #-}
 {-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE UndecidableInstances  #-}
 
@@ -53,6 +54,7 @@ import qualified Data.List as List
 import           Data.Maybe (catMaybes)
 import           Data.String (IsString (..))
 import           Data.Word (Word64)
+import           SafeWildCards
 
 import qualified Test.QuickCheck as QC
 import           Test.QuickCheck (ASCIIString (..), Arbitrary (..), Gen,
@@ -227,29 +229,32 @@ data Errors = Errors
   , removeFileE               :: ErrorStream
   , renameFileE               :: ErrorStream
   }
+$(pure []) -- https://blog.monadfix.com/th-groups
 
 -- | Return 'True' if all streams are empty ('null').
 allNull :: Errors -> Bool
-allNull Errors {..} = Stream.null dumpStateE
-                   && Stream.null hOpenE
-                   && Stream.null hCloseE
-                   && Stream.null hSeekE
-                   && Stream.null hGetSomeE
-                   && Stream.null hGetSomeAtE
-                   && Stream.null hPutSomeE
-                   && Stream.null hTruncateE
-                   && Stream.null hGetSizeE
-                   && Stream.null createDirectoryE
-                   && Stream.null createDirectoryIfMissingE
-                   && Stream.null listDirectoryE
-                   && Stream.null doesDirectoryExistE
-                   && Stream.null doesFileExistE
-                   && Stream.null removeFileE
-                   && Stream.null renameFileE
-
+allNull $(fields 'Errors) = and [
+      Stream.null dumpStateE
+    , Stream.null hOpenE
+    , Stream.null hCloseE
+    , Stream.null hSeekE
+    , Stream.null hGetSomeE
+    , Stream.null hGetSomeAtE
+    , Stream.null hPutSomeE
+    , Stream.null hTruncateE
+    , Stream.null hGetSizeE
+    , Stream.null createDirectoryE
+    , Stream.null createDirectoryIfMissingE
+    , Stream.null listDirectoryE
+    , Stream.null doesDirectoryExistE
+    , Stream.null doesFileExistE
+    , Stream.null removeDirectoryRecursiveE
+    , Stream.null removeFileE
+    , Stream.null renameFileE
+    ]
 
 instance Show Errors where
-  show Errors {..} =
+  show $(fields 'Errors) =
       "Errors {"  <> intercalate ", " streams <> "}"
     where
       -- | Show a stream unless it is empty
@@ -273,6 +278,7 @@ instance Show Errors where
         , s "listDirectoryE"            listDirectoryE
         , s "doesDirectoryExistE"       doesDirectoryExistE
         , s "doesFileExistE"            doesFileExistE
+        , s "removeDirectoryRecursiveE" removeDirectoryRecursiveE
         , s "removeFileE"               removeFileE
         , s "renameFileE"               renameFileE
         ]
@@ -365,7 +371,7 @@ genErrors genPartialWrites genSubstituteWithJunk = do
 instance Arbitrary Errors where
   arbitrary = genErrors True True
 
-  shrink err@Errors {..} = filter (not . allNull) $ concat
+  shrink err@($(fields 'Errors)) = filter (not . allNull) $ concat
       [ (\s' -> err { dumpStateE = s' })                <$> Stream.shrinkStream dumpStateE
       , (\s' -> err { hOpenE = s' })                    <$> Stream.shrinkStream hOpenE
       , (\s' -> err { hCloseE = s' })                   <$> Stream.shrinkStream hCloseE
@@ -380,6 +386,7 @@ instance Arbitrary Errors where
       , (\s' -> err { listDirectoryE = s' })            <$> Stream.shrinkStream listDirectoryE
       , (\s' -> err { doesDirectoryExistE = s' })       <$> Stream.shrinkStream doesDirectoryExistE
       , (\s' -> err { doesFileExistE = s' })            <$> Stream.shrinkStream doesFileExistE
+      , (\s' -> err { removeDirectoryRecursiveE = s' }) <$> Stream.shrinkStream removeDirectoryRecursiveE
       , (\s' -> err { removeFileE = s' })               <$> Stream.shrinkStream removeFileE
       , (\s' -> err { renameFileE = s' })               <$> Stream.shrinkStream renameFileE
       ]

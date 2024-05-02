@@ -46,6 +46,7 @@ library
     , mtl
     , primitive          ^>=0.9
     , QuickCheck
+    , safe-wild-cards    ^>=1.0
     , strict-stm         >=0.3  && <1.5
     , text               >=1.2  && <2.2
 
