@@ -20,15 +20,16 @@ module System.FS.Sim.Error (
   , ErrorStreamPutSome
     -- * Generating partial reads/writes
   , Partial (..)
-  , hGetSomePartial
-  , hPutSomePartial
+  , partialiseByteCount
+  , partialiseWord64
+  , partialiseByteString
     -- * Blob
   , Blob (..)
   , blobFromBS
   , blobToBS
     -- * Generating corruption for 'hPutSome'
   , PutCorruption (..)
-  , corrupt
+  , corruptByteString
     -- * Error streams for 'HasFS'
   , Errors (..)
   , allNull
@@ -37,24 +38,25 @@ module System.FS.Sim.Error (
   , simpleErrors
   ) where
 
-import           Prelude hiding (null)
-
 import           Control.Concurrent.Class.MonadSTM.Strict
 import           Control.Monad (void)
 import           Control.Monad.Class.MonadThrow hiding (handle)
-
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy.Char8 as LC8
+import           Data.Coerce (coerce)
 import           Data.Foldable (for_)
 import           Data.List (intercalate)
 import qualified Data.List as List
 import           Data.Maybe (catMaybes)
 import           Data.String (IsString (..))
 import           Data.Word (Word64)
+import           Foreign.C.Types
+import           Prelude hiding (null)
 import           SafeWildCards
+import           System.Posix.Types
 
 import qualified Test.QuickCheck as QC
 import           Test.QuickCheck (ASCIIString (..), Arbitrary (..), Gen,
@@ -89,21 +91,20 @@ import           System.FS.Sim.Stream (Stream)
 -- construct the actual 'FsError'.
 type ErrorStream = Stream FsErrorType
 
+-- | 'ErrorStream' for reading bytes from a file: an error or a partial get.
+type ErrorStreamGetSome = Stream (Either FsErrorType Partial)
+
+-- | 'ErrorStream' for writing bytes to a file: an error and possibly some
+-- corruption, or a partial write.
+type ErrorStreamPutSome =
+  Stream (Either (FsErrorType, Maybe PutCorruption) Partial)
+
 {-------------------------------------------------------------------------------
-  Generating partial reads/writes for hGetSome and hPutSome
+  Generating partial reads/writes
 -------------------------------------------------------------------------------}
 
--- | Given a @'Partial' p@ where @p > 0@, we do the following to make a call
--- to 'hGetSome' or 'hPutSome' partial:
---
--- * 'hGetSome': we subtract @p@ from the number of requested bytes. If that
---    would result in 0 requested bytes or less, we request 1 byte. If the
---    number of requested bytes was already 0, leave it untouched, as we can't
---    simulate a partial read in this case.
--- * 'hPutSome': we drop the last @p@ bytes from the bytestring. If that would
---   result in an empty bytestring, just take the first byte of the
---   bytestring. If the bytestring was already empty, leave it untouched, as
---   we can't simulate a partial write in this case.
+-- | A @'Partial' p@, where @p > 0@, is a number representing how many fewer
+-- bytes should be read or written than requested.
 newtype Partial = Partial Word64
     deriving (Show)
 
@@ -112,22 +113,28 @@ instance Arbitrary Partial where
   shrink (Partial p) =
     [Partial p' | p' <- [1..p]]
 
-hGetSomePartial :: Partial -> Word64 -> Word64
-hGetSomePartial (Partial p) n
-    | 0 <- n    = 0
-    | p >= n    = 1
-    | otherwise = n - p
+-- | Given a requested number of bytes to read/write, compute a partial number
+-- of bytes to read/write.
+--
+-- We subtract @p@ from the number of requested bytes. If that would result in 0
+-- requested bytes or less, we request 1 byte. If the number of requested bytes
+-- was already 0, we can't simulate a partial read so we return 0 again.
+partialiseByteCount :: Partial -> ByteCount -> ByteCount
+partialiseByteCount (Partial p) c
+  | 0 <- c'   = c
+  | p >= c'   = 1
+  | otherwise = c - fromIntegral p
+  where c' = fromIntegral c
 
-hPutSomePartial :: Partial -> BS.ByteString -> BS.ByteString
-hPutSomePartial (Partial p) bs
-    | 0 <- len  = bs
-    | p >= len  = BS.take 1 bs
-    | otherwise = BS.take (fromIntegral (len - p)) bs
-  where
-    len = fromIntegral (BS.length bs)
+-- | Like 'partialiseByteCount', but for 'Word64'.
+partialiseWord64 :: Partial -> Word64 -> Word64
+partialiseWord64 = coerce partialiseByteCount
 
--- | 'ErrorStream' for 'hGetSome': an error or a partial get.
-type ErrorStreamGetSome = Stream (Either FsErrorType Partial)
+-- | Given a bytestring that is requested to be written to disk, use
+-- 'partialiseByteCount' to compute a partial bytestring.
+partialiseByteString :: Partial -> BS.ByteString -> BS.ByteString
+partialiseByteString p bs = BS.take (fromIntegral $ partialiseByteCount p len) bs
+  where len = fromIntegral (BS.length bs)
 
 {------------------------------------------------------------------------------
   Blob
@@ -181,15 +188,13 @@ instance Arbitrary PutCorruption where
       [PartialWrite partial' | partial' <- shrink partial]
 
 -- | Apply the 'PutCorruption' to the 'BS.ByteString'.
-corrupt :: BS.ByteString -> PutCorruption -> BS.ByteString
-corrupt bs pc = case pc of
+--
+-- If the bytestring is subsitituted by corrupt junk, then the output bytestring
+-- __might__ be larger than the input bytestring.
+corruptByteString :: BS.ByteString -> PutCorruption -> BS.ByteString
+corruptByteString bs pc = case pc of
     SubstituteWithJunk blob -> getBlob blob
-    PartialWrite partial    -> hPutSomePartial partial bs
-
--- | 'ErrorStream' for 'hPutSome': an error and possibly some corruption, or a
--- partial write.
-type ErrorStreamPutSome =
-  Stream (Either (FsErrorType, Maybe PutCorruption) Partial)
+    PartialWrite partial    -> partialiseByteString partial bs
 
 {-------------------------------------------------------------------------------
   Simulated errors
@@ -208,7 +213,6 @@ type ErrorStreamPutSome =
 -- top of 'SimFS' that simulates methods throwing 'FsError's.
 data Errors = Errors
   { dumpStateE                :: ErrorStream -- TODO remove
-
     -- Operations on files
   , hOpenE                    :: ErrorStream
   , hCloseE                   :: ErrorStream
@@ -218,7 +222,6 @@ data Errors = Errors
   , hPutSomeE                 :: ErrorStreamPutSome
   , hTruncateE                :: ErrorStream
   , hGetSizeE                 :: ErrorStream
-
     -- Operations on directories
   , createDirectoryE          :: ErrorStream
   , createDirectoryIfMissingE :: ErrorStream
@@ -294,9 +297,9 @@ simpleErrors es = Errors
     , hOpenE                    = es
     , hCloseE                   = es
     , hSeekE                    = es
-    , hGetSomeE                 =  Left                <$> es
-    , hGetSomeAtE               =  Left                <$> es
-    , hPutSomeE                 = (Left . (, Nothing)) <$> es
+    , hGetSomeE                 = Left               <$> es
+    , hGetSomeAtE               = Left               <$> es
+    , hPutSomeE                 = Left . (, Nothing) <$> es
     , hTruncateE                = es
     , hGetSizeE                 = es
     , createDirectoryE          = es
@@ -371,7 +374,7 @@ genErrors genPartialWrites genSubstituteWithJunk = do
 instance Arbitrary Errors where
   arbitrary = genErrors True True
 
-  shrink err@($(fields 'Errors)) = filter (not . allNull) $ concat
+  shrink err@($(fields 'Errors)) = concatMap (filter (not . allNull))
       [ (\s' -> err { dumpStateE = s' })                <$> Stream.shrinkStream dumpStateE
       , (\s' -> err { hOpenE = s' })                    <$> Stream.shrinkStream hOpenE
       , (\s' -> err { hCloseE = s' })                   <$> Stream.shrinkStream hCloseE
@@ -566,7 +569,7 @@ hGetSome' errorsVar hGetSomeWrapped handle n =
         , fsLimitation  = False
         }
       Just (Right partial) ->
-        hGetSomeWrapped handle (hGetSomePartial partial n)
+        hGetSomeWrapped handle (partialiseWord64 partial n)
 
 -- | In the thread safe version of 'hGetSome', we simulate exactly the same errors.
 hGetSomeAt' :: (MonadSTM m, MonadThrow m, HasCallStack)
@@ -585,7 +588,7 @@ hGetSomeAt' errorsVar hGetSomeAtWrapped handle n offset =
         , fsLimitation  = False
         }
       Just (Right partial) ->
-        hGetSomeAtWrapped handle (hGetSomePartial partial n) offset
+        hGetSomeAtWrapped handle (partialiseWord64 partial n) offset
 
 -- | Execute the wrapped 'hPutSome', throw an error and apply possible
 -- corruption to the blob to write, or simulate a partial write, depending on
@@ -599,7 +602,7 @@ hPutSome' errorsVar hPutSomeWrapped handle bs =
       Nothing                       -> hPutSomeWrapped handle bs
       Just (Left (errType, mbCorr)) -> do
         for_ mbCorr $ \corr ->
-          void $ hPutSomeWrapped handle (corrupt bs corr)
+          void $ hPutSomeWrapped handle (corruptByteString bs corr)
         throwIO FsError
           { fsErrorType   = errType
           , fsErrorPath   = fsToFsErrorPathUnmounted $ handlePath handle
@@ -611,4 +614,4 @@ hPutSome' errorsVar hPutSomeWrapped handle bs =
           , fsLimitation  = False
           }
       Just (Right partial)          ->
-        hPutSomeWrapped handle (hPutSomePartial partial bs)
+        hPutSomeWrapped handle (partialiseByteString partial bs)
