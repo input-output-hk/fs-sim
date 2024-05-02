@@ -7,6 +7,10 @@
 * Orphan `Show` instance for `Foreign.C.Error.Errno` removed by `fs-api`.
 * New `primitive ^>=0.9` dependency
 * New `safe-wild-cards^>=1.0`dependency
+* Rename some functions related to partial reads/writes and corruption in `System.FS.Sim.Error`:
+  * Replace `hGetSomePartial` by `partialiseByteCount`/`partialiseWord64`.
+  * Replace `hPutSomePartial` by `partialiseByteString`
+  * Replace `corrupt` by `corruptByteString`
 
 ### Patch
 
