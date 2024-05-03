@@ -1,12 +1,11 @@
 {-# LANGUAGE TypeFamilies  #-}
 {-# LANGUAGE TypeOperators #-}
 
--- | IO implementation of the 'HasFS' class
+-- | IO implementation of the 'HasFS' interface
 module System.FS.IO (
     -- * IO implementation & monad
     HandleIO
   , ioHasFS
-  , ioHasBufFS
   ) where
 
 import           Control.Concurrent.MVar
@@ -32,7 +31,7 @@ import qualified System.FS.IO.Internal.Handle as H
 -- We store the path the handle points to for better error messages
 type HandleIO = F.FHandle
 
-ioHasFS :: MonadIO m => MountPoint -> HasFS m HandleIO
+ioHasFS :: (MonadIO m, PrimState IO ~ PrimState m) => MountPoint -> HasFS m HandleIO
 ioHasFS mount = HasFS {
       -- TODO(adn) Might be useful to implement this properly by reading all
       -- the stuff available at the 'MountPoint'.
@@ -77,6 +76,18 @@ ioHasFS mount = HasFS {
         Dir.renameFile (root fp1) (root fp2)
     , mkFsErrorPath = fsToFsErrorPath mount
     , unsafeToFilePath = pure . root
+    , hGetBufSome = \(Handle h fp) buf bufOff c ->  liftIO $ rethrowFsError fp $
+        withMutableByteArrayContents buf $ \ptr ->
+          F.readBuf h (ptr `Foreign.plusPtr` unBufferOffset bufOff) c
+    , hGetBufSomeAt = \(Handle h fp) buf bufOff c off -> liftIO $ rethrowFsError fp $
+        withMutableByteArrayContents buf $ \ptr ->
+          F.preadBuf h (ptr `Foreign.plusPtr` unBufferOffset bufOff) c (fromIntegral $ unAbsOffset off)
+    , hPutBufSome = \(Handle h fp) buf bufOff c -> liftIO $ rethrowFsError fp $
+        withMutableByteArrayContents buf $ \ptr ->
+          F.writeBuf h (ptr `Foreign.plusPtr` unBufferOffset bufOff) c
+    , hPutBufSomeAt = \(Handle h fp) buf bufOff c off -> liftIO $ rethrowFsError fp $
+        withMutableByteArrayContents buf $ \ptr ->
+          F.pwriteBuf h (ptr `Foreign.plusPtr` unBufferOffset bufOff) c (fromIntegral $ unAbsOffset off)
     }
   where
     root :: FsPath -> FilePath
@@ -101,28 +112,3 @@ _rethrowFsError mount fp action = do
 
     errorPath :: FsErrorPath
     errorPath = fsToFsErrorPath mount fp
-
-{-------------------------------------------------------------------------------
-  HasBufFS
--------------------------------------------------------------------------------}
-
-ioHasBufFS ::
-     (MonadIO m, PrimState IO ~ PrimState m)
-  => MountPoint
-  -> HasBufFS m HandleIO
-ioHasBufFS mount = HasBufFS {
-      hGetBufSome = \(Handle h fp) buf bufOff c ->  liftIO $ rethrowFsError fp $
-        withMutableByteArrayContents buf $ \ptr ->
-          F.readBuf h (ptr `Foreign.plusPtr` unBufferOffset bufOff) c
-    , hGetBufSomeAt = \(Handle h fp) buf bufOff c off -> liftIO $ rethrowFsError fp $
-        withMutableByteArrayContents buf $ \ptr ->
-          F.preadBuf h (ptr `Foreign.plusPtr` unBufferOffset bufOff) c (fromIntegral $ unAbsOffset off)
-    , hPutBufSome = \(Handle h fp) buf bufOff c -> liftIO $ rethrowFsError fp $
-        withMutableByteArrayContents buf $ \ptr ->
-          F.writeBuf h (ptr `Foreign.plusPtr` unBufferOffset bufOff) c
-    , hPutBufSomeAt = \(Handle h fp) buf bufOff c off -> liftIO $ rethrowFsError fp $
-        withMutableByteArrayContents buf $ \ptr ->
-          F.pwriteBuf h (ptr `Foreign.plusPtr` unBufferOffset bufOff) c (fromIntegral $ unAbsOffset off)
-    }
-  where
-    rethrowFsError = _rethrowFsError mount

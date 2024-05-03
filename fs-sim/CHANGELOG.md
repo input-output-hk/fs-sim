@@ -11,6 +11,20 @@
   * Replace `hGetSomePartial` by `partialiseByteCount`/`partialiseWord64`.
   * Replace `hPutSomePartial` by `partialiseByteString`
   * Replace `corrupt` by `corruptByteString`
+* Remove `System.FS.Sim.Pure` module.
+* Adapt `simHasFS` to the new `HasFS` primitives. This leads to two breaking
+  changes:
+  * Add a `PrimMonad m` constraint to `runSimFS`, `simHasFS'` and `simHasFS`.
+  * Change the `StrictTVar` argument to `simHasFS` to a `StrictTMVar`.
+* Adapt `mkSimErrorHasFS` to the new `HasFS` primitives. This leads to two
+  breaking changes:
+  * Add a `PrimMonad m` constraint to `runSimErrorFS`, `mkSimErrorHasFS'` and `mkSimErrorHasFS`.
+  * Change the `StrictTVar` argument to `mkSimErrorHasFS` to a `StrictTMVar`.
+
+### Non-breaking
+
+* New constructors for the `Errors` type: `hGetBufSomeE`, `hGetBufSomeAtE`,
+  `hGetBufSomeE`, and `hPutBufSomeAtE`.
 
 ### Patch
 

@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -10,6 +11,7 @@ module System.FS.Sim.STM (
 
 import           Control.Concurrent.Class.MonadSTM.Strict
 import           Control.Monad.Class.MonadThrow
+import           Control.Monad.Primitive
 
 import           System.FS.API
 
@@ -24,25 +26,25 @@ import           System.FS.Sim.Prim
 --- | Runs a computation provided an initial 'MockFS', producing a
 --- result, the final state of the filesystem and a sequence of actions occurred
 --- in the filesystem.
-runSimFS :: (MonadSTM m, MonadThrow m)
+runSimFS :: (MonadSTM m, MonadThrow m, PrimMonad m)
          => MockFS
          -> (HasFS m HandleMock -> m a)
          -> m (a, MockFS)
 runSimFS fs act = do
-    var <- newTVarIO fs
+    var <- newTMVarIO fs
     a   <- act (simHasFS var)
-    fs' <- readTVarIO var
+    fs' <- atomically $ takeTMVar var
     return (a, fs')
 
 -- | Alternative to 'simHasFS' that creates 'TVar's internally.
-simHasFS' :: (MonadSTM m, MonadThrow m)
+simHasFS' :: (MonadSTM m, MonadThrow m, PrimMonad m)
           => MockFS
           -> m (HasFS m HandleMock)
-simHasFS' mockFS = simHasFS <$> newTVarIO mockFS
+simHasFS' mockFS = simHasFS <$> newTMVarIO mockFS
 
 -- | Equip @m@ with a @HasFs@ instance using the mock file system
-simHasFS :: forall m. (MonadSTM m, MonadThrow m)
-         => StrictTVar m MockFS
+simHasFS :: forall m. (MonadSTM m, MonadThrow m, PrimMonad m)
+         => StrictTMVar m MockFS
          -> HasFS m HandleMock
 simHasFS var = HasFS {
       dumpState                = sim     Mock.dumpState
@@ -65,21 +67,32 @@ simHasFS var = HasFS {
     , renameFile               = sim  .: Mock.renameFile
     , mkFsErrorPath            = fsToFsErrorPathUnmounted
     , unsafeToFilePath         = \_ -> error "simHasFS:unsafeToFilePath"
+      -- File I\/O with user-supplied buffers
+    , hGetBufSome              = sim ...:  Mock.hGetBufSome
+    , hGetBufSomeAt            = sim ....: Mock.hGetBufSomeAt
+    , hPutBufSome              = sim ...:  Mock.hPutBufSome
+    , hPutBufSomeAt            = sim ....: Mock.hPutBufSomeAt
     }
   where
-    sim :: FSSim a -> m a
+    sim :: FSSimT m a -> m a
     sim m = do
-      eOrA <- atomically $ do
-        st <- readTVar var
-        case runFSSim m st of
-          Left e -> return $ Left e
-          Right (a, st') -> do
-            writeTVar var st'
-            return $ Right a
-      either throwIO return eOrA
+      st <- atomically $ takeTMVar var
+      runFSSimT m st >>= \case
+        Left e -> do
+          atomically $ putTMVar var st
+          throwIO e
+        Right (a, st') -> do
+          atomically $ putTMVar var st'
+          pure a
 
     (.:) :: (y -> z) -> (x0 -> x1 -> y) -> (x0 -> x1 -> z)
     (f .: g) x0 x1 = f (g x0 x1)
 
     (..:) :: (y -> z) -> (x0 -> x1 -> x2 -> y) -> (x0 -> x1 -> x2 -> z)
     (f ..: g) x0 x1 x2 = f (g x0 x1 x2)
+
+    (...:) :: (y -> z) -> (x0 -> x1 -> x2 -> x3 -> y) -> (x0 -> x1 -> x2 -> x3 -> z)
+    (f ...: g) x0 x1 x2 x3 = f (g x0 x1 x2 x3)
+
+    (....:) :: (y -> z) -> (x0 -> x1 -> x2 -> x3 -> x4 -> y) -> (x0 -> x1 -> x2 -> x3 -> x4 -> z)
+    (f ....: g) x0 x1 x2 x3 x4 = f (g x0 x1 x2 x3 x4)

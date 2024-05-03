@@ -193,10 +193,9 @@ data Success fp h =
 -- | Successful semantics
 run :: forall m h. (PrimMonad m, HasCallStack)
     => HasFS m h
-    -> HasBufFS m h
     -> Cmd FsPath (Handle h)
     -> m (Success FsPath (Handle h))
-run hasFS@HasFS{..} hasBufFS = go
+run hasFS@HasFS{..} = go
   where
     go :: Cmd FsPath (Handle h) -> m (Success FsPath (Handle h))
     go (Open pe mode) =
@@ -214,11 +213,11 @@ run hasFS@HasFS{..} hasBufFS = go
     -- partial reads/writes, see #502.
     go (Get      h n           ) = ByteString <$> hGetSomeChecked hasFS h n
     go (GetAt    h n o         ) = ByteString <$> hGetSomeAtChecked hasFS h n o
-    go (GetBuf   h n           ) = uncurry BCBS <$> hGetBufSomeChecked hasFS hasBufFS h n
-    go (GetBufAt h n o         ) = uncurry BCBS <$> hGetBufSomeAtChecked hasFS hasBufFS h n o
+    go (GetBuf   h n           ) = uncurry BCBS <$> hGetBufSomeChecked hasFS h n
+    go (GetBufAt h n o         ) = uncurry BCBS <$> hGetBufSomeAtChecked hasFS h n o
     go (Put      h bs          ) = Word64     <$> hPutSomeChecked hasFS h bs
-    go (PutBuf   h bs n        ) = ByteCount  <$> hPutBufSomeChecked hasBufFS h bs n
-    go (PutBufAt h bs n o      ) = ByteCount  <$> hPutBufSomeAtChecked hasBufFS h bs n o
+    go (PutBuf   h bs n        ) = ByteCount  <$> hPutBufSomeChecked hasFS h bs n
+    go (PutBufAt h bs n o      ) = ByteCount  <$> hPutBufSomeAtChecked hasFS h bs n o
     go (Truncate h sz          ) = Unit       <$> hTruncate h sz
     go (GetSize  h             ) = Word64     <$> hGetSize  h
     go (ListDirectory      pe  ) = withPE  pe      (const Strings) $ listDirectory
@@ -320,9 +319,8 @@ hPutSomeChecked HasFS{..} h bytes = do
 
 hGetBufSomeChecked :: (HasCallStack, PrimMonad m)
                    => HasFS m h
-                   -> HasBufFS m h
                    -> Handle h -> ByteCount -> m (ByteCount, ByteString)
-hGetBufSomeChecked HasFS{..} HasBufFS{..} h n = do
+hGetBufSomeChecked HasFS{..} h n = do
     allocaMutableByteArray (fromIntegral n) $ \buf -> do
       n' <- hGetBufSome h buf 0 n
       bs <- fromJust <$> Mock.fromBuffer buf 0 n'
@@ -336,9 +334,8 @@ hGetBufSomeChecked HasFS{..} HasBufFS{..} h n = do
 
 hGetBufSomeAtChecked :: (HasCallStack, PrimMonad m)
                      => HasFS m h
-                     -> HasBufFS m h
                      -> Handle h -> ByteCount -> AbsOffset -> m (ByteCount, ByteString)
-hGetBufSomeAtChecked HasFS{..} HasBufFS{..} h n o = do
+hGetBufSomeAtChecked HasFS{..} h n o = do
     allocaMutableByteArray (fromIntegral n) $ \buf -> do
       n' <- hGetBufSomeAt h buf 0 n o
       bs <- fromJust <$> Mock.fromBuffer buf 0 n'
@@ -351,9 +348,9 @@ hGetBufSomeAtChecked HasFS{..} HasBufFS{..} h n o = do
       pure (n', bs)
 
 hPutBufSomeChecked :: (HasCallStack, PrimMonad m)
-                   => HasBufFS m h
+                   => HasFS m h
                    -> Handle h -> ByteString -> ByteCount -> m ByteCount
-hPutBufSomeChecked HasBufFS{..} h bs n =
+hPutBufSomeChecked HasFS{..} h bs n =
     allocaMutableByteArray (min (fromIntegral n) (BS.length bs)) $ \buf -> do
       void $ Mock.intoBuffer buf 0 (BS.take (fromIntegral n) bs)
       n' <- hPutBufSome h buf 0 n
@@ -362,9 +359,9 @@ hPutBufSomeChecked HasBufFS{..} h bs n =
         else return n
 
 hPutBufSomeAtChecked :: (HasCallStack, PrimMonad m)
-                     => HasBufFS m h
+                     => HasFS m h
                      -> Handle h -> ByteString -> ByteCount -> AbsOffset -> m ByteCount
-hPutBufSomeAtChecked HasBufFS{..} h bs n o =
+hPutBufSomeAtChecked HasFS{..} h bs n o =
     allocaMutableByteArray (min (fromIntegral n) (BS.length bs)) $ \buf -> do
       void $ Mock.intoBuffer buf 0 (BS.take (fromIntegral n) bs)
       n' <- hPutBufSomeAt h buf 0 n o
@@ -392,7 +389,7 @@ instance (Eq fp, Eq h) => Eq (Resp fp h) where
 runPure :: Cmd FsPath (Handle HandleMock)
         -> MockFS -> (Resp FsPath (Handle HandleMock), MockFS)
 runPure cmd mockFS =
-    aux $ runST $ runFSSimT (run primHasFS primHasBufFS cmd) mockFS
+    aux $ runST $ runFSSimT (run primHasMockFS cmd) mockFS
   where
     aux :: Either FsError (Success FsPath (Handle HandleMock), MockFS)
         -> (Resp FsPath (Handle HandleMock), MockFS)
@@ -401,7 +398,7 @@ runPure cmd mockFS =
 
 runIO :: MountPoint
       -> Cmd FsPath (Handle HandleIO) -> IO (Resp FsPath (Handle HandleIO))
-runIO mount cmd = Resp <$> E.try (run (ioHasFS mount) (ioHasBufFS mount) cmd)
+runIO mount cmd = Resp <$> E.try (run (ioHasFS mount) cmd)
 
 {-------------------------------------------------------------------------------
   Bitraversable instances
