@@ -6,15 +6,17 @@
 
 * New `primitive ^>=0.9` dependency
 * Remove orphan `Show` instance for `Foreign.C.Error.Errno`.
+* Provide implementations for the new primitives in the `IO` implementation of
+  `HasFS`. As a result, `ioHasFS` now requires that `PrimState IO ~ PrimState m`.
 
 ### Non-breaking
 
-* Add new `HasBufFS` interface for performing I/O using buffers. Note that it is
-  likely that this interfaced is unified with the `HasFS` interface in the
-  future.
-* Add compound functions, built from primitives in `HasBufFS`: `hGetAllAt`,
-  `hGetBufExactly`, `hPutBufExactly`, `hGetBufExactlyAt` and `hPutBufExactlyAt`
-* Provide an instantiation of the `HasBufFS` interface for `IO`.
+* Add new primitives to the `HasFS` interface for performing file I/O with
+  user-supplied buffers: `hGetBufSome`, `hGetBufSomeAt`, `hPutBufSome`, and
+  `hPutBufSomeAt`.
+* Add compound functions, built from the new primitives in `HasFS`:
+  `hGetBufExactly`, `hGetBufExactlyAt`, `hPutBufExactly`,  and
+  `hPutBufExactlyAt`.
 
 ### Patch
 

@@ -39,8 +39,9 @@ module System.FS.Sim.Error (
   ) where
 
 import           Control.Concurrent.Class.MonadSTM.Strict
-import           Control.Monad (void)
+import           Control.Monad (unless, void)
 import           Control.Monad.Class.MonadThrow hiding (handle)
+import           Control.Monad.Primitive
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as C8
@@ -51,6 +52,7 @@ import           Data.Foldable (for_)
 import           Data.List (intercalate)
 import qualified Data.List as List
 import           Data.Maybe (catMaybes)
+import           Data.Primitive.ByteArray
 import           Data.String (IsString (..))
 import           Data.Word (Word64)
 import           Foreign.C.Types
@@ -66,6 +68,7 @@ import           Util.CallStack
 
 import           System.FS.API
 
+import qualified System.FS.Sim.MockFS as MockFS
 import           System.FS.Sim.MockFS (HandleMock, MockFS)
 import qualified System.FS.Sim.STM as Sim
 import qualified System.FS.Sim.Stream as Stream
@@ -189,12 +192,62 @@ instance Arbitrary PutCorruption where
 
 -- | Apply the 'PutCorruption' to the 'BS.ByteString'.
 --
--- If the bytestring is subsitituted by corrupt junk, then the output bytestring
+-- If the bytestring is substituted by corrupt junk, then the output bytestring
 -- __might__ be larger than the input bytestring.
 corruptByteString :: BS.ByteString -> PutCorruption -> BS.ByteString
 corruptByteString bs pc = case pc of
     SubstituteWithJunk blob -> getBlob blob
     PartialWrite partial    -> partialiseByteString partial bs
+
+-- | Apply the 'PutCorruption' to a 'MutableByteArray'.
+--
+-- This either means that part of the bytes written to file are subsituted with
+-- junk, or that only part of the buffer will be written out to disk due to a
+-- partial write.
+--
+-- With respect to junk substitution, the intent of this function is to model
+-- corruption of the bytes written to a file, __not__ corruption of the
+-- in-memory buffer itself. As such, we don't corrupt the argument
+-- 'MutableByteArray' in place, but instead we return a new 'MutableByteArray'
+-- that has the same contents plus some possible corruption. This ensures that
+-- the corruption is not visible to other parts of the program that use the same
+-- 'MutableByteArray'. Corruption will only be applied to the buffer at the the
+-- given 'BufferOffset', up to the requested 'ByteCount'. If there are not
+-- enough bytes in the bytearray, then corruption will only apply up until the
+-- end of the bytearray.
+--
+-- With respect to partial writes, the function returns a new number of
+-- requested bytes, which is strictly smaller or equal to the input
+-- 'ByteCount'.
+--
+-- NOTE: junk substitution and partial writes are mutually exclusive, and so
+-- this functions produces only one effect. Either the buffer contents are
+-- changed, or the 'ByteCount' is reduced.
+corruptBuffer ::
+     PrimMonad m
+  => MutableByteArray (PrimState m)
+  -> BufferOffset
+  -> ByteCount
+  -> PutCorruption
+  -> m (MutableByteArray (PrimState m), ByteCount)
+corruptBuffer buf bufOff c pc = do
+    case pc of
+      SubstituteWithJunk blob -> do
+        len <- getSizeofMutableByteArray buf
+        -- this creates an unpinned byte array containing a copy of @buf@. It should
+        -- be fine that it is unpinned, because the simulation is fully in-memory.
+        copy <- freezeByteArray buf 0 len
+        buf' <- unsafeThawByteArray copy
+        -- Only corrupt up to the end of the bytearray.
+        let lenRemaining = len - unBufferOffset bufOff
+        b <- MockFS.intoBuffer buf' bufOff (BS.take lenRemaining (getBlob blob))
+        -- Applying the corruption shouldn't have failed because we've ensured
+        -- that the bytestring isn't too large to fit into the buffer.
+        unless b $ error "corruptBuffer: corruption failed. This probably \
+                         \indicates a bug in the fs-sim library."
+        pure (buf', c)
+      PartialWrite partial ->
+        pure (buf, partialiseByteCount partial c)
 
 {-------------------------------------------------------------------------------
   Simulated errors
@@ -231,6 +284,11 @@ data Errors = Errors
   , removeDirectoryRecursiveE :: ErrorStream
   , removeFileE               :: ErrorStream
   , renameFileE               :: ErrorStream
+    -- File I\/O with user-supplied buffers
+  , hGetBufSomeE              :: ErrorStreamGetSome
+  , hGetBufSomeAtE            :: ErrorStreamGetSome
+  , hPutBufSomeE              :: ErrorStreamPutSome
+  , hPutBufSomeAtE            :: ErrorStreamPutSome
   }
 $(pure []) -- https://blog.monadfix.com/th-groups
 
@@ -254,6 +312,9 @@ allNull $(fields 'Errors) = and [
     , Stream.null removeDirectoryRecursiveE
     , Stream.null removeFileE
     , Stream.null renameFileE
+      -- File I\/O with user-supplied buffers
+    , Stream.null hGetBufSomeE, Stream.null hGetBufSomeAtE
+    , Stream.null hPutBufSomeE, Stream.null hPutBufSomeAtE
     ]
 
 instance Show Errors where
@@ -284,6 +345,11 @@ instance Show Errors where
         , s "removeDirectoryRecursiveE" removeDirectoryRecursiveE
         , s "removeFileE"               removeFileE
         , s "renameFileE"               renameFileE
+          -- File I\/O with user-supplied buffers
+        , s "hGetBufSomeE"   hGetBufSomeE
+        , s "hGetBufSomeAtE" hGetBufSomeAtE
+        , s "hPutBufSomeE"   hPutBufSomeE
+        , s "hPutBufSomeAtE" hPutBufSomeAtE
         ]
 
 emptyErrors :: Errors
@@ -310,6 +376,11 @@ simpleErrors es = Errors
     , removeDirectoryRecursiveE = es
     , removeFileE               = es
     , renameFileE               = es
+      -- File I\/O with user-supplied buffers
+    , hGetBufSomeE   = Left <$> es
+    , hGetBufSomeAtE = Left <$> es
+    , hPutBufSomeE   = Left . (, Nothing) <$> es
+    , hPutBufSomeAtE = Left . (, Nothing) <$> es
     }
 
 -- | Generator for 'Errors' that allows some things to be disabled.
@@ -320,9 +391,7 @@ genErrors :: Bool  -- ^ 'True' -> generate partial writes
           -> Bool  -- ^ 'True' -> generate 'SubstituteWithJunk' corruptions
           -> Gen Errors
 genErrors genPartialWrites genSubstituteWithJunk = do
-    let streamGen l = Stream.genInfinite . Stream.genMaybe' l . QC.elements
-        streamGen' l = Stream.genInfinite . Stream.genMaybe' l . QC.frequency
-        -- TODO which errors are possible for these operations below (that
+    let -- TODO which errors are possible for these operations below (that
         -- have dummy for now)?
         dummy = streamGen 2 [ FsInsufficientPermissions ]
     dumpStateE          <- dummy
@@ -336,20 +405,9 @@ genErrors genPartialWrites genSubstituteWithJunk = do
       , FsResourceAlreadyInUse, FsResourceAlreadyExist
       , FsInsufficientPermissions, FsTooManyOpenFiles ]
     hSeekE      <- streamGen 3 [ FsReachedEOF ]
-    hGetSomeE   <- streamGen' 20
-      [ (1, return $ Left FsReachedEOF)
-      , (3, Right <$> arbitrary) ]
-    hGetSomeAtE <- streamGen' 20
-      [ (1, return $ Left FsReachedEOF)
-      , (3, Right <$> arbitrary) ]
-    hPutSomeE   <- streamGen' 5
-      [ (1, Left . (FsDeviceFull, ) <$> QC.frequency
-            [ (2, return Nothing)
-            , (1, Just . PartialWrite <$> arbitrary)
-            , (if genSubstituteWithJunk then 1 else 0,
-               Just . SubstituteWithJunk <$> arbitrary)
-            ])
-      , (if genPartialWrites then 3 else 0, Right <$> arbitrary) ]
+    hGetSomeE   <- commonGetErrors
+    hGetSomeAtE <- commonGetErrors
+    hPutSomeE   <- commonPutErrors
     hGetSizeE   <- streamGen 2 [ FsResourceDoesNotExist ]
     createDirectoryE <- streamGen 3
       [ FsInsufficientPermissions, FsResourceInappropriateType
@@ -369,7 +427,28 @@ genErrors genPartialWrites genSubstituteWithJunk = do
     renameFileE    <- streamGen 3
       [ FsInsufficientPermissions, FsResourceAlreadyInUse
       , FsResourceDoesNotExist, FsResourceInappropriateType ]
+    -- File I\/O with user-supplied buffers
+    hGetBufSomeE   <- commonGetErrors
+    hGetBufSomeAtE <- commonGetErrors
+    hPutBufSomeE   <- commonPutErrors
+    hPutBufSomeAtE <- commonPutErrors
     return Errors {..}
+  where
+    streamGen l = Stream.genInfinite . Stream.genMaybe' l . QC.elements
+    streamGen' l = Stream.genInfinite . Stream.genMaybe' l . QC.frequency
+
+    commonGetErrors = streamGen' 20
+      [ (1, return $ Left FsReachedEOF)
+      , (3, Right <$> arbitrary) ]
+
+    commonPutErrors = streamGen' 5
+      [ (1, Left . (FsDeviceFull, ) <$> QC.frequency
+            [ (2, return Nothing)
+            , (1, Just . PartialWrite <$> arbitrary)
+            , (if genSubstituteWithJunk then 1 else 0,
+               Just . SubstituteWithJunk <$> arbitrary)
+            ])
+      , (if genPartialWrites then 3 else 0, Right <$> arbitrary) ]
 
 instance Arbitrary Errors where
   arbitrary = genErrors True True
@@ -392,6 +471,11 @@ instance Arbitrary Errors where
       , (\s' -> err { removeDirectoryRecursiveE = s' }) <$> Stream.shrinkStream removeDirectoryRecursiveE
       , (\s' -> err { removeFileE = s' })               <$> Stream.shrinkStream removeFileE
       , (\s' -> err { renameFileE = s' })               <$> Stream.shrinkStream renameFileE
+        -- File I\/O with user-supplied buffers
+      , (\s' -> err { hGetBufSomeE = s' })   <$> Stream.shrinkStream hGetBufSomeE
+      , (\s' -> err { hGetBufSomeAtE = s' }) <$> Stream.shrinkStream hGetBufSomeAtE
+      , (\s' -> err { hPutBufSomeE = s' })   <$> Stream.shrinkStream hPutBufSomeE
+      , (\s' -> err { hPutBufSomeAtE = s' }) <$> Stream.shrinkStream hPutBufSomeAtE
       ]
 
 {-------------------------------------------------------------------------------
@@ -399,23 +483,23 @@ instance Arbitrary Errors where
 -------------------------------------------------------------------------------}
 
 -- | Alternative to 'mkSimErrorHasFS' that creates 'TVar's internally.
-mkSimErrorHasFS' :: (MonadSTM m, MonadThrow m)
+mkSimErrorHasFS' :: (MonadSTM m, MonadThrow m, PrimMonad m)
                  => MockFS
                  -> Errors
                  -> m (HasFS m HandleMock)
 mkSimErrorHasFS' mockFS errs =
-    mkSimErrorHasFS <$> newTVarIO mockFS <*> newTVarIO errs
+    mkSimErrorHasFS <$> newTMVarIO mockFS <*> newTVarIO errs
 
 -- | Introduce possibility of errors
 --
 -- TODO: Lenses would be nice for the setters
-mkSimErrorHasFS :: forall m. (MonadSTM m, MonadThrow m)
-                => StrictTVar m MockFS
+mkSimErrorHasFS :: forall m. (MonadSTM m, MonadThrow m, PrimMonad m)
+                => StrictTMVar m MockFS
                 -> StrictTVar m Errors
                 -> HasFS m HandleMock
 mkSimErrorHasFS fsVar errorsVar =
     case Sim.simHasFS fsVar of
-      HasFS{..} -> HasFS{
+      hfs@HasFS{..} -> HasFS{
           dumpState =
             withErr errorsVar (mkFsPath ["<dumpState>"]) dumpState "dumpState"
               dumpStateE (\e es -> es { dumpStateE = e })
@@ -465,20 +549,25 @@ mkSimErrorHasFS fsVar errorsVar =
             renameFileE (\e es -> es { renameFileE = e })
         , mkFsErrorPath = fsToFsErrorPathUnmounted
         , unsafeToFilePath = error "mkSimErrorHasFS:unsafeToFilePath"
+          -- File I\/O with user-supplied buffers
+        , hGetBufSome   = hGetBufSomeWithErr   errorsVar hfs
+        , hGetBufSomeAt = hGetBufSomeAtWithErr errorsVar hfs
+        , hPutBufSome   = hPutBufSomeWithErr   errorsVar hfs
+        , hPutBufSomeAt = hPutBufSomeAtWithErr errorsVar hfs
         }
 
 -- | Runs a computation provided an 'Errors' and an initial
 -- 'MockFS', producing a result and the final state of the filesystem.
-runSimErrorFS :: (MonadSTM m, MonadThrow m)
+runSimErrorFS :: (MonadSTM m, MonadThrow m, PrimMonad m)
               => MockFS
               -> Errors
               -> (StrictTVar m Errors -> HasFS m HandleMock -> m a)
               -> m (a, MockFS)
 runSimErrorFS mockFS errors action = do
-    fsVar     <- newTVarIO mockFS
+    fsVar     <- newTMVarIO mockFS
     errorsVar <- newTVarIO errors
     a         <- action errorsVar $ mkSimErrorHasFS fsVar errorsVar
-    fs'       <- readTVarIO fsVar
+    fs'       <- atomically $ takeTMVar fsVar
     return (a, fs')
 
 -- | Execute the next action using the given 'Errors'. After the action is
@@ -615,3 +704,139 @@ hPutSome' errorsVar hPutSomeWrapped handle bs =
           }
       Just (Right partial)          ->
         hPutSomeWrapped handle (partialiseByteString partial bs)
+
+{-------------------------------------------------------------------------------
+  File I\/O with user-supplied buffers
+-------------------------------------------------------------------------------}
+
+-- | Short-hand for the type of 'hGetBufSome'
+type HGetBufSome m =
+     Handle HandleMock
+  -> MutableByteArray (PrimState m)
+  -> BufferOffset
+  -> ByteCount
+  -> m ByteCount
+
+-- | Execute the wrapped 'hGetBufSome', throw an error, or simulate a partial
+-- read, depending on the corresponding 'ErrorStreamGetSome' (see 'nextError').
+hGetBufSomeWithErr  ::
+     (MonadSTM m, MonadThrow m, HasCallStack)
+  => StrictTVar m Errors
+  -> HasFS m HandleMock
+  -> HGetBufSome m
+hGetBufSomeWithErr errorsVar hfs h buf bufOff c =
+    next errorsVar hGetBufSomeE (\e es -> es { hGetBufSomeE = e }) >>= \case
+      Nothing             -> hGetBufSome hfs h buf bufOff c
+      Just (Left errType) -> throwIO FsError
+        { fsErrorType   = errType
+        , fsErrorPath   = fsToFsErrorPathUnmounted $ handlePath h
+        , fsErrorString = "simulated error: hGetBufSome"
+        , fsErrorNo     = Nothing
+        , fsErrorStack  = prettyCallStack
+        , fsLimitation  = False
+        }
+      Just (Right partial) ->
+        hGetBufSome hfs h buf bufOff (partialiseByteCount partial c)
+
+-- | Short-hand for the type of 'hGetBufSomeAt'
+type HGetBufSomeAt m =
+     Handle HandleMock
+  -> MutableByteArray (PrimState m)
+  -> BufferOffset
+  -> ByteCount
+  -> AbsOffset
+  -> m ByteCount
+
+-- | Execute the wrapped 'hGetBufSomeAt', throw an error, or simulate a partial
+-- read, depending on the corresponding 'ErrorStreamGetSome' (see 'nextError').
+hGetBufSomeAtWithErr  ::
+     (MonadSTM m, MonadThrow m, HasCallStack)
+  => StrictTVar m Errors
+  -> HasFS m HandleMock
+  -> HGetBufSomeAt m
+hGetBufSomeAtWithErr errorsVar hfs h buf bufOff c off =
+    next errorsVar hGetBufSomeAtE (\e es -> es { hGetBufSomeAtE = e }) >>= \case
+      Nothing             -> hGetBufSomeAt hfs h buf bufOff c off
+      Just (Left errType) -> throwIO FsError
+        { fsErrorType   = errType
+        , fsErrorPath   = fsToFsErrorPathUnmounted $ handlePath h
+        , fsErrorString = "simulated error: hGetBufSomeAt"
+        , fsErrorNo     = Nothing
+        , fsErrorStack  = prettyCallStack
+        , fsLimitation  = False
+        }
+      Just (Right partial) ->
+        hGetBufSomeAt hfs h buf bufOff (partialiseByteCount partial c) off
+
+-- | Short-hand for the type of 'hPutBufSome'
+type HPutBufSome m =
+     Handle HandleMock
+  -> MutableByteArray (PrimState m)
+  -> BufferOffset
+  -> ByteCount
+  -> m ByteCount
+
+-- | Execute the wrapped 'hPutBufSome', throw an error and apply possible
+-- corruption to the blob to write, or simulate a partial write, depending on
+-- the corresponding 'ErrorStreamPutSome' (see 'nextError').
+hPutBufSomeWithErr ::
+     (MonadSTM m, MonadThrow m, PrimMonad m, HasCallStack)
+  => StrictTVar m Errors
+  -> HasFS m HandleMock
+  -> HPutBufSome m
+hPutBufSomeWithErr errorsVar hfs h buf bufOff c =
+    next errorsVar hPutBufSomeE (\e es -> es { hPutBufSomeE = e }) >>= \case
+      Nothing                       -> hPutBufSome hfs h buf bufOff c
+      Just (Left (errType, mbCorr)) -> do
+        for_ mbCorr $ \corr -> do
+          (buf', c') <- corruptBuffer buf bufOff c corr
+          void $ hPutBufSome hfs h buf' bufOff c'
+        throwIO FsError
+          { fsErrorType   = errType
+          , fsErrorPath   = fsToFsErrorPathUnmounted $ handlePath h
+          , fsErrorString = "simulated error: hPutSome" <> case mbCorr of
+              Nothing   -> ""
+              Just corr -> " with corruption: " <> show corr
+          , fsErrorNo     = Nothing
+          , fsErrorStack  = prettyCallStack
+          , fsLimitation  = False
+          }
+      Just (Right partial)          ->
+        hPutBufSome hfs h buf bufOff (partialiseByteCount partial c)
+
+-- | Short-hand for the type of 'hPutBufSomeAt'
+type HPutBufSomeAt m =
+     Handle HandleMock
+  -> MutableByteArray (PrimState m)
+  -> BufferOffset
+  -> ByteCount
+  -> AbsOffset
+  -> m ByteCount
+
+-- | Execute the wrapped 'hPutBufSomeAt', throw an error and apply possible
+-- corruption to the blob to write, or simulate a partial write, depending on
+-- the corresponding 'ErrorStreamPutSome' (see 'nextError').
+hPutBufSomeAtWithErr ::
+     (MonadSTM m, MonadThrow m, PrimMonad m, HasCallStack)
+  => StrictTVar m Errors
+  -> HasFS m HandleMock
+  -> HPutBufSomeAt m
+hPutBufSomeAtWithErr errorsVar hfs h buf bufOff c off =
+    next errorsVar hPutBufSomeAtE (\e es -> es { hPutBufSomeAtE = e }) >>= \case
+      Nothing                       -> hPutBufSomeAt hfs h buf bufOff c off
+      Just (Left (errType, mbCorr)) -> do
+        for_ mbCorr $ \corr -> do
+          (buf', c') <- corruptBuffer buf bufOff c corr
+          void $ hPutBufSomeAt hfs h buf' bufOff c' off
+        throwIO FsError
+          { fsErrorType   = errType
+          , fsErrorPath   = fsToFsErrorPathUnmounted $ handlePath h
+          , fsErrorString = "simulated error: hPutSome" <> case mbCorr of
+              Nothing   -> ""
+              Just corr -> " with corruption: " <> show corr
+          , fsErrorNo     = Nothing
+          , fsErrorStack  = prettyCallStack
+          , fsLimitation  = False
+          }
+      Just (Right partial)          ->
+        hPutBufSomeAt hfs h buf bufOff (partialiseByteCount partial c) off

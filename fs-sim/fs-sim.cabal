@@ -30,7 +30,6 @@ library
     System.FS.Sim.Error
     System.FS.Sim.FsTree
     System.FS.Sim.MockFS
-    System.FS.Sim.Pure
     System.FS.Sim.STM
     System.FS.Sim.Stream
 

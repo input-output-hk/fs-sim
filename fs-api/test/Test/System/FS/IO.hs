@@ -45,10 +45,8 @@ toByteString n mba = freezeByteArray mba 0 n >>= \(ByteArray ba) -> pure (SBS.fr
 
 -- | A write-then-read roundtrip test for buffered I\/O in 'IO'.
 --
--- The 'ByteString'\'s internal pointer doubles as the buffer used for the I\/O
--- operations, and we only write/read a prefix of the bytestring. This does not
--- test what happens if we try to write/read more bytes than fits in the buffer,
--- because the behaviour is then undefined.
+-- This does not test what happens if we try to write/read more bytes than fits
+-- in the buffer, because the behaviour is then undefined.
 prop_roundtrip_hPutGetBufSome ::
      ByteString
   -> Small ByteCount -- ^ Prefix length
@@ -57,15 +55,14 @@ prop_roundtrip_hPutGetBufSome bs (Small c) =
   BS.length bs >= fromIntegral c ==>
   ioProperty $ withSystemTempDirectory "prop_roundtrip_hPutGetBufSome" $ \dirPath -> do
     let hfs  = IO.ioHasFS (FS.MountPoint dirPath)
-        hbfs = IO.ioHasBufFS (FS.MountPoint dirPath)
 
     FS.withFile hfs (FS.mkFsPath ["temp"]) (FS.WriteMode FS.MustBeNew) $ \h -> do
       putBuf <- fromByteString bs
-      m <- FS.hPutBufSome hbfs h putBuf 0 c
+      m <- FS.hPutBufSome hfs h putBuf 0 c
       let writeTest = counterexample "wrote too many bytes" ((if c > 0 then 1 .<= m else property True) .&&. m .<= c)
       FS.hSeek hfs h FS.AbsoluteSeek 0
       getBuf <- newPinnedByteArray (fromIntegral m)
-      o <- FS.hGetBufSome hbfs h getBuf 0 m
+      o <- FS.hGetBufSome hfs h getBuf 0 m
       let readTest = counterexample "read too many bytes"   ((if c > 0 then 1 .<= o else property True) .&&. o .<= m)
       bs' <- toByteString (fromIntegral o) getBuf
       let cmpTest = counterexample "(prefix of) input and output bytestring do not match"
@@ -82,14 +79,13 @@ prop_roundtrip_hPutGetBufSomeAt bs (Small c) off =
   BS.length bs >= fromIntegral c ==>
   ioProperty $ withSystemTempDirectory "prop_roundtrip_hPutGetBufSomeAt" $ \dirPath -> do
     let hfs  = IO.ioHasFS (FS.MountPoint dirPath)
-        hbfs = IO.ioHasBufFS (FS.MountPoint dirPath)
 
     FS.withFile hfs (FS.mkFsPath ["temp"]) (FS.WriteMode FS.MustBeNew) $ \h -> do
       putBuf <- fromByteString bs
-      m <- FS.hPutBufSomeAt hbfs h putBuf 0 c off
+      m <- FS.hPutBufSomeAt hfs h putBuf 0 c off
       let writeTest = counterexample "wrote too many bytes" ((if c > 0 then 1 .<= m else property True) .&&. m .<= c)
       getBuf <- newPinnedByteArray (fromIntegral m)
-      o <- FS.hGetBufSomeAt hbfs h getBuf 0 m off
+      o <- FS.hGetBufSomeAt hfs h getBuf 0 m off
       let readTest = counterexample "read too many bytes"   ((if c > 0 then 1 .<= o else property True) .&&. o .<= m)
       bs' <- toByteString (fromIntegral o) getBuf
       let cmpTest = counterexample "(prefix of) input and output bytestring do not match"
@@ -106,15 +102,14 @@ prop_roundtrip_hPutGetBufExactly bs (Small c) =
   BS.length bs >= fromIntegral c ==>
   ioProperty $ withSystemTempDirectory "prop_roundtrip_hPutGetBufExactly" $ \dirPath -> do
     let hfs  = IO.ioHasFS (FS.MountPoint dirPath)
-        hbfs = IO.ioHasBufFS (FS.MountPoint dirPath)
 
     FS.withFile hfs (FS.mkFsPath ["temp"]) (FS.WriteMode FS.MustBeNew) $ \h -> do
       putBuf <- fromByteString bs
-      m <- FS.hPutBufExactly hbfs h putBuf 0 c
+      m <- FS.hPutBufExactly hfs h putBuf 0 c
       let writeTest = counterexample "wrote too few bytes" (m === c)
       FS.hSeek hfs h FS.AbsoluteSeek 0
       getBuf <- newPinnedByteArray (fromIntegral c)
-      o <- FS.hGetBufExactly hfs hbfs h getBuf 0 c
+      o <- FS.hGetBufExactly hfs h getBuf 0 c
       let readTest = counterexample "read too few byes"    (o === c)
       bs' <- toByteString (fromIntegral c) getBuf
       let cmpTest = counterexample "input and output bytestring do not match"
@@ -132,14 +127,13 @@ prop_roundtrip_hPutGetBufExactlyAt bs (Small c) off =
   BS.length bs >= fromIntegral c ==>
   ioProperty $ withSystemTempDirectory "prop_roundtrip_hPutGetBufExactlyAt" $ \dirPath -> do
     let hfs  = IO.ioHasFS (FS.MountPoint dirPath)
-        hbfs = IO.ioHasBufFS (FS.MountPoint dirPath)
 
     FS.withFile hfs (FS.mkFsPath ["temp"]) (FS.WriteMode FS.MustBeNew) $ \h -> do
       putBuf <- fromByteString bs
-      m <- FS.hPutBufExactlyAt hbfs h putBuf 0 c off
+      m <- FS.hPutBufExactlyAt hfs h putBuf 0 c off
       let writeTest = counterexample "wrote too few bytes" (m === c)
       getBuf <- newPinnedByteArray (fromIntegral c)
-      o <- FS.hGetBufExactlyAt hfs hbfs h getBuf 0 c off
+      o <- FS.hGetBufExactlyAt hfs h getBuf 0 c off
       let readTest = counterexample "read too few byes"    (o === c)
       bs' <- toByteString (fromIntegral c) getBuf
       let cmpTest = counterexample "input and output bytestring do not match"
