@@ -37,8 +37,7 @@ import           Data.Word
 import           System.Posix.Types (ByteCount)
 
 import           System.FS.API.Types as Types
-
-import           Util.CallStack
+import           System.FS.CallStack
 
 {------------------------------------------------------------------------------
   Record that abstracts over the filesystem

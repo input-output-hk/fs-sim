@@ -103,11 +103,10 @@ import           Test.Tasty (TestTree, localOption, testGroup)
 import           Test.Tasty.QuickCheck
 
 import           System.FS.API
+import           System.FS.CallStack
+import           System.FS.Condense
 import           System.FS.IO
 import qualified System.FS.IO.Internal as F
-
-import           Util.CallStack
-import           Util.Condense
 
 import           System.FS.Sim.FsTree (FsTree (..))
 import qualified System.FS.Sim.MockFS as Mock

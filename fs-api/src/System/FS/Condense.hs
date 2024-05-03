@@ -5,7 +5,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 -- | Condensed but human-readable output (like 'Show').
-module Util.Condense (
+module System.FS.Condense (
     Condense (..)
   , Condense1 (..)
   , condense1

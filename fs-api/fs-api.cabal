@@ -31,12 +31,12 @@ library
     System.FS.API.Lazy
     System.FS.API.Strict
     System.FS.API.Types
+    System.FS.CallStack
+    System.FS.Condense
     System.FS.CRC
     System.FS.IO
     System.FS.IO.Internal
     System.FS.IO.Internal.Handle
-    Util.CallStack
-    Util.Condense
 
   default-language: Haskell2010
   build-depends:

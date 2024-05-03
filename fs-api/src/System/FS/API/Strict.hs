@@ -11,7 +11,7 @@ module System.FS.API.Strict (
 import qualified Data.ByteString as BS
 import           Data.Word
 import           System.FS.API as API
-import           Util.CallStack
+import           System.FS.CallStack
 
 -- | This function makes sure that the whole 'BS.ByteString' is written.
 hPutAllStrict :: forall m h

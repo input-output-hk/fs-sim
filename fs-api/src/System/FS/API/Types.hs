@@ -61,8 +61,8 @@ import           System.FilePath
 import           System.IO (SeekMode (..))
 import qualified System.IO.Error as IO
 
-import           Util.CallStack
-import           Util.Condense
+import           System.FS.CallStack
+import           System.FS.Condense
 
 {-------------------------------------------------------------------------------
   Modes

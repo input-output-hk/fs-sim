@@ -87,7 +87,7 @@ import           System.Posix.Types (ByteCount)
 
 import           System.FS.API (BufferOffset (..))
 import           System.FS.API.Types
-import           Util.CallStack
+import           System.FS.CallStack
 
 import qualified System.FS.Sim.FsTree as FS
 import           System.FS.Sim.FsTree (FsTree (..), FsTreeError (..))

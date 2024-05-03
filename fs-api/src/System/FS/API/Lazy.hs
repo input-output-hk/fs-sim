@@ -22,7 +22,7 @@ import qualified Data.ByteString.Lazy as BL
 import           Data.Word (Word64)
 import           System.FS.API as API
 import           System.FS.API.Strict
-import           Util.CallStack (HasCallStack, prettyCallStack)
+import           System.FS.CallStack (HasCallStack, prettyCallStack)
 
 -- | Makes sure it reads all requested bytes.
 -- If eof is found before all bytes are read, it throws an exception.

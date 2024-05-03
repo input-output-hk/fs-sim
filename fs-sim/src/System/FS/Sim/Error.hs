@@ -64,9 +64,8 @@ import qualified Test.QuickCheck as QC
 import           Test.QuickCheck (ASCIIString (..), Arbitrary (..), Gen,
                      suchThat)
 
-import           Util.CallStack
-
 import           System.FS.API
+import           System.FS.CallStack
 
 import qualified System.FS.Sim.MockFS as MockFS
 import           System.FS.Sim.MockFS (HandleMock, MockFS)
