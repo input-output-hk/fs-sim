@@ -3,7 +3,7 @@
 -- | CallStack with a nicer 'Show' instance
 --
 -- Use of this module is intended to /replace/ import of @GHC.Stack@
-module Util.CallStack (
+module System.FS.CallStack (
     prettyCallStack
     -- * opaque
   , PrettyCallStack

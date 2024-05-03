@@ -8,6 +8,8 @@
 * Remove orphan `Show` instance for `Foreign.C.Error.Errno`.
 * Provide implementations for the new primitives in the `IO` implementation of
   `HasFS`. As a result, `ioHasFS` now requires that `PrimState IO ~ PrimState m`.
+* Rename `Util.CallStack` and `Util.Condense` to `System.FS.CallStack` and
+  `System.FS.Condense` respectively.
 
 ### Non-breaking
 

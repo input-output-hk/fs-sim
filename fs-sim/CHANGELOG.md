@@ -32,6 +32,7 @@
   `Errors` are empty.
 * The `Show Errors` instance was not printing every stream.
 * The shrinker for `Errors` was not shrinking every stream.
+* Adapt to moving of `Util` modules in `fs-api`.
 
 ## 0.2.1.1 -- 2023-10-30
 
