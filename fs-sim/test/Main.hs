@@ -1,20 +1,13 @@
 module Main (main) where
 
-import           System.IO.Temp (withSystemTempDirectory)
-
-import           Test.Tasty
-
+import qualified Test.System.FS.Sim.Error
 import qualified Test.System.FS.Sim.FsTree
 import qualified Test.System.FS.StateMachine
+import           Test.Tasty
 
 main :: IO ()
-main = withSystemTempDirectory "fs-sim-test" $ \tmpDir ->
-  defaultMain $
-    testGroup "Test" [
-        testGroup "System" [
-            testGroup "FS" [
-                Test.System.FS.StateMachine.tests tmpDir
-              , Test.System.FS.Sim.FsTree.tests
-              ]
-          ]
-      ]
+main = defaultMain $ testGroup "fs-sim-test" [
+      Test.System.FS.Sim.Error.tests
+    , Test.System.FS.Sim.FsTree.tests
+    , Test.System.FS.StateMachine.tests
+    ]

@@ -59,12 +59,18 @@ test-suite fs-sim-test
   hs-source-dirs:   test src
   main-is:          Main.hs
   other-modules:
+    System.FS.Sim.Error
     System.FS.Sim.FsTree
     System.FS.Sim.MockFS
     System.FS.Sim.Prim
+    System.FS.Sim.STM
+    System.FS.Sim.Stream
+    Test.System.FS.Sim.Error
     Test.System.FS.Sim.FsTree
     Test.System.FS.StateMachine
+    Test.Util
     Test.Util.RefEnv
+    Test.Util.WithEntryCounter
 
   default-language: Haskell2010
   build-depends:
@@ -75,12 +81,15 @@ test-suite fs-sim-test
     , containers
     , fs-api
     , generics-sop
+    , io-classes
     , mtl
     , pretty-show
     , primitive
     , QuickCheck
     , quickcheck-state-machine  >=0.7.2 && <0.8
     , random
+    , safe-wild-cards
+    , strict-stm
     , tasty
     , tasty-hunit
     , tasty-quickcheck
