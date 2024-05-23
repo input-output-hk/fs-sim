@@ -84,7 +84,7 @@ import           Data.Word (Word64)
 import qualified Generics.SOP as SOP
 import           GHC.Generics
 import           GHC.Stack hiding (prettyCallStack)
-import           System.IO.Temp (withTempDirectory)
+import           System.IO.Temp (withSystemTempDirectory)
 import           System.Posix.Types (ByteCount)
 import           System.Random (getStdRandom, randomR)
 import           Text.Read (readMaybe)
@@ -1567,14 +1567,14 @@ showLabelledExamples' mReplay numTests focus = do
 showLabelledExamples :: IO ()
 showLabelledExamples = showLabelledExamples' Nothing 1000 (const True)
 
-prop_sequential :: FilePath -> Property
-prop_sequential tmpDir = withMaxSuccess 1000 $
-    QSM.forAllCommands (sm mountUnused) Nothing $ runCmds tmpDir
+prop_sequential :: Property
+prop_sequential = withMaxSuccess 1000 $
+    QSM.forAllCommands (sm mountUnused) Nothing runCmds
 
-runCmds :: FilePath -> QSM.Commands (At Cmd) (At Resp) -> Property
-runCmds tmpDir cmds = QC.monadicIO $ do
+runCmds :: QSM.Commands (At Cmd) (At Resp) -> Property
+runCmds cmds = QC.monadicIO $ do
       (tstTmpDir, hist, res) <- QC.run $
-        withTempDirectory tmpDir "HasFS" $ \tstTmpDir -> do
+        withSystemTempDirectory "StateMachine" $ \tstTmpDir -> do
           let mount = MountPoint tstTmpDir
               sm'   = sm mount
 
@@ -1591,11 +1591,11 @@ runCmds tmpDir cmds = QC.monadicIO $ do
         $ counterexample ("Mount point: " ++ tstTmpDir)
         $ res === QSM.Ok
 
-tests :: FilePath -> TestTree
-tests tmpDir = testGroup "HasFS" [
-      testProperty "q-s-m" $ prop_sequential tmpDir
+tests :: TestTree
+tests = testGroup "Test.System.FS.StateMachine" [
+      testProperty "q-s-m" $ prop_sequential
     , localOption (QuickCheckTests 1)
-    $ testProperty "regression_removeFileOnDir" $ runCmds tmpDir regression_removeFileOnDir
+    $ testProperty "regression_removeFileOnDir" $ runCmds regression_removeFileOnDir
     ]
 
 -- | Unused mount mount
