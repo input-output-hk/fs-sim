@@ -10,6 +10,11 @@
   `HasFS`. As a result, `ioHasFS` now requires that `PrimState IO ~ PrimState m`.
 * Rename `Util.CallStack` and `Util.Condense` to `System.FS.CallStack` and
   `System.FS.Condense` respectively.
+* Make modules in the `System.FS.IO.Internal` hierarchy public, inspired by
+  "Internal convention is a mistake". The following modules are moved/renamed:
+  * `System.FS.IO.Internal` is moved to `System.FS.IO.Unix` on Linux and MacOS
+    systems, and moved to `System.FS.IO.Windows` on Windows systems.
+  * `System.FS.IO.Internal.Handle` is moved to `System.FS.IO.Handle`.
 
 ### Non-breaking
 
@@ -19,10 +24,6 @@
 * Add compound functions, built from the new primitives in `HasFS`:
   `hGetBufExactly`, `hGetBufExactlyAt`, `hPutBufExactly`,  and
   `hPutBufExactlyAt`.
-
-### Patch
-
-* Make internal error comparison function more lenient on MacOS systems.
 
 ## 0.2.0.1 -- 2023-10-30
 
