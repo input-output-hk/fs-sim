@@ -1,9 +1,9 @@
+{-# LANGUAGE CPP           #-}
 {-# LANGUAGE TypeFamilies  #-}
 {-# LANGUAGE TypeOperators #-}
 
--- | IO implementation of the 'HasFS' interface
+-- | 'IO' implementation of the 'HasFS' interface.
 module System.FS.IO (
-    -- * IO implementation & monad
     HandleIO
   , ioHasFS
   ) where
@@ -19,8 +19,13 @@ import qualified Foreign
 import           GHC.Stack
 import qualified System.Directory as Dir
 import           System.FS.API
-import qualified System.FS.IO.Internal as F
-import qualified System.FS.IO.Internal.Handle as H
+#if defined(mingw32_HOST_OS)
+import qualified System.FS.IO.Windows as F
+#else
+-- treat every other distribution like it is (Ubuntu) Linux
+import qualified System.FS.IO.Unix as F
+#endif
+import qualified System.FS.IO.Handle as H
 
 {-------------------------------------------------------------------------------
   I/O implementation of HasFS
@@ -31,6 +36,10 @@ import qualified System.FS.IO.Internal.Handle as H
 -- We store the path the handle points to for better error messages
 type HandleIO = F.FHandle
 
+-- | 'IO' implementation of the 'HasFS' interface using the /real/ file system.
+--
+-- The concrete implementation depends on the OS distribution, but behaviour
+-- should be similar across distributions.
 ioHasFS :: (MonadIO m, PrimState IO ~ PrimState m) => MountPoint -> HasFS m HandleIO
 ioHasFS mount = HasFS {
       -- TODO(adn) Might be useful to implement this properly by reading all
@@ -94,21 +103,14 @@ ioHasFS mount = HasFS {
     root = fsToFilePath mount
 
     rethrowFsError :: HasCallStack => FsPath -> IO a -> IO a
-    rethrowFsError = _rethrowFsError mount
+    rethrowFsError fp action = do
+        res <- E.try action
+        case res of
+          Left err -> handleError err
+          Right a  -> return a
+      where
+        handleError :: HasCallStack => IOError -> IO a
+        handleError ioErr = E.throwIO $ ioToFsError errorPath ioErr
 
-{-# INLINE _rethrowFsError #-}
--- | Catch IO exceptions and rethrow them as 'FsError'
---
--- See comments for 'ioToFsError'
-_rethrowFsError :: HasCallStack => MountPoint -> FsPath -> IO a -> IO a
-_rethrowFsError mount fp action = do
-    res <- E.try action
-    case res of
-      Left err -> handleError err
-      Right a  -> return a
-  where
-    handleError :: HasCallStack => IOError -> IO a
-    handleError ioErr = E.throwIO $ ioToFsError errorPath ioErr
-
-    errorPath :: FsErrorPath
-    errorPath = fsToFsErrorPath mount fp
+        errorPath :: FsErrorPath
+        errorPath = fsToFsErrorPath mount fp

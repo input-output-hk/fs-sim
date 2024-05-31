@@ -1,5 +1,5 @@
+{-# LANGUAGE CPP                      #-}
 {-# LANGUAGE DeriveAnyClass           #-}
-{-# LANGUAGE DeriveFoldable           #-}
 {-# LANGUAGE DeriveGeneric            #-}
 {-# LANGUAGE DeriveTraversable        #-}
 {-# LANGUAGE FlexibleInstances        #-}
@@ -106,7 +106,6 @@ import           System.FS.API
 import           System.FS.CallStack
 import           System.FS.Condense
 import           System.FS.IO
-import qualified System.FS.IO.Internal as F
 
 import           System.FS.Sim.FsTree (FsTree (..))
 import qualified System.FS.Sim.MockFS as Mock
@@ -375,13 +374,61 @@ allocaMutableByteArray size action = newPinnedByteArray size >>= action
   Instantiating the semantics
 -------------------------------------------------------------------------------}
 
+-- | For some error types, our mock FS implementation, which is based on
+-- (Ubuntu) Linux might throw different errors than the actual file system. In
+-- particular, this problem occurs when the file system under test is a Windows
+-- or MacOS one. In these cases, the 'sameError' comparison function, which is
+-- used to compare the 'FsError's that the mock throws against the 'FsError's
+-- that the SUT throws, is more lenient than the default 'sameFsError'.
+sameError :: FsError -> FsError -> Bool
+#if defined(mingw32_HOST_OS)
+-- For the following error types, our mock FS implementation (and the Posix
+-- implementation) throw the same errors:
+--
+-- * 'FsReachedEOF'
+-- * 'FsDeviceFull'
+-- * 'FsResourceAlreadyInUse'
+--
+-- For other cases, Windows throws different errors than the mock FS
+-- implementation.
+sameError e1 e2 = fsErrorPath e1 == fsErrorPath e2
+               && sameFsErrorType (fsErrorType e1) (fsErrorType e2)
+  where
+    sameFsErrorType ty1 ty2 = case (ty1, ty2) of
+      (FsReachedEOF,           FsReachedEOF)           -> True
+      (FsReachedEOF,           _)                      -> False
+      (_,                      FsReachedEOF)           -> False
+      (FsDeviceFull,           FsDeviceFull)           -> True
+      (FsDeviceFull,           _)                      -> False
+      (_,                      FsDeviceFull)           -> False
+      (FsResourceAlreadyInUse, FsResourceAlreadyInUse) -> True
+      (FsResourceAlreadyInUse, _)                      -> False
+      (_,                      FsResourceAlreadyInUse) -> False
+      (_,                      _)                      -> True
+#elif defined(darwin_HOST_OS)
+-- Check default implementation first using 'sameFsError', and otherwise permit
+-- some combinations of error types that are not structurally equal.
+sameError e1 e2 = sameFsError e1 e2
+               || (fsErrorPath e1 == fsErrorPath e2
+               && permitted (fsErrorType e1) (fsErrorType e2))
+  where
+    -- error types that are permitted to differ for technical reasons
+    permitted ty1 ty2 = case (ty1, ty2) of
+      (FsInsufficientPermissions  , FsResourceInappropriateType) -> True
+      (FsResourceInappropriateType, FsInsufficientPermissions  ) -> True
+      (_                          , _                          ) -> False
+#else
+-- treat every other distribution like it is (Ubuntu) Linux
+sameError = sameFsError
+#endif
+
 -- | Responses are either successful termination or an error
 newtype Resp fp h = Resp { getResp :: Either FsError (Success fp h) }
   deriving (Show, Functor, Foldable)
 
--- | The 'Eq' instance for 'Resp' uses 'F.sameError'
+-- | The 'Eq' instance for 'Resp' uses 'sameError'
 instance (Eq fp, Eq h) => Eq (Resp fp h) where
-  Resp (Left  e) == Resp (Left  e') = F.sameError e e'
+  Resp (Left  e) == Resp (Left  e') = sameError e e'
   Resp (Right a) == Resp (Right a') = a == a'
   _              == _               = False
 
@@ -395,9 +442,9 @@ runPure cmd mockFS =
     aux (Left e)             = (Resp (Left e), mockFS)
     aux (Right (r, mockFS')) = (Resp (Right r), mockFS')
 
-runIO :: MountPoint
+runIO :: HasFS IO HandleIO
       -> Cmd FsPath (Handle HandleIO) -> IO (Resp FsPath (Handle HandleIO))
-runIO mount cmd = Resp <$> E.try (run (ioHasFS mount) cmd)
+runIO hfs cmd = Resp <$> E.try (run hfs cmd)
 
 {-------------------------------------------------------------------------------
   Bitraversable instances
@@ -822,25 +869,25 @@ postcondition model cmd resp =
     errorHasMountPoint (Right _)      = QSM.Top
     errorHasMountPoint (Left fsError) = QSM.Boolean $ hasMountPoint fsError
 
-semantics :: MountPoint -> Cmd :@ Concrete -> IO (Resp :@ Concrete)
-semantics mount (At cmd) =
+semantics :: HasFS IO HandleIO -> Cmd :@ Concrete -> IO (Resp :@ Concrete)
+semantics hfs (At cmd) =
     At . bimap QSM.reference QSM.reference <$>
-      runIO mount (bimap QSM.concrete QSM.concrete cmd)
+      runIO hfs (bimap QSM.concrete QSM.concrete cmd)
 
 -- | The state machine proper
-sm :: MountPoint -> QSM.StateMachine Model (At Cmd) IO (At Resp)
-sm mount = QSM.StateMachine {
-               initModel     = initModel
-             , transition    = transition
-             , precondition  = precondition
-             , postcondition = postcondition
-             , generator     = Just . generator
-             , shrinker      = shrinker
-             , semantics     = semantics mount
-             , mock          = mock
-             , cleanup       = QSM.noCleanup
-             , invariant     = Nothing
-             }
+sm :: HasFS IO HandleIO -> QSM.StateMachine Model (At Cmd) IO (At Resp)
+sm hfs = QSM.StateMachine {
+      initModel     = initModel
+    , transition    = transition
+    , precondition  = precondition
+    , postcondition = postcondition
+    , generator     = Just . generator
+    , shrinker      = shrinker
+    , semantics     = semantics hfs
+    , mock          = mock
+    , cleanup       = QSM.noCleanup
+    , invariant     = Nothing
+    }
 
 {-------------------------------------------------------------------------------
   Labelling
@@ -1555,7 +1602,7 @@ showLabelledExamples' mReplay numTests focus = do
 
     putStrLn $ "Used replaySeed " ++ show replaySeed
   where
-    sm' = sm mountUnused
+    sm' = sm unusedHasFS
     pp  = \x -> ppShow x ++ "\n" ++ condense x
 
     collects :: Show a => [a] -> Property -> Property
@@ -1569,23 +1616,24 @@ showLabelledExamples = showLabelledExamples' Nothing 1000 (const True)
 
 prop_sequential :: Property
 prop_sequential = withMaxSuccess 1000 $
-    QSM.forAllCommands (sm mountUnused) Nothing runCmds
+    QSM.forAllCommands (sm unusedHasFS) Nothing $ runCmds
 
 runCmds :: QSM.Commands (At Cmd) (At Resp) -> Property
 runCmds cmds = QC.monadicIO $ do
       (tstTmpDir, hist, res) <- QC.run $
         withSystemTempDirectory "StateMachine" $ \tstTmpDir -> do
           let mount = MountPoint tstTmpDir
-              sm'   = sm mount
+              hfs   = ioHasFS mount
+              sm'   = sm hfs
 
           (hist, model, res) <- QSM.runCommands' (pure sm') cmds
 
           -- Close all open handles
-          forM_ (RE.keys (knownHandles model)) $ F.close . handleRaw . QSM.concrete
+          forM_ (RE.keys (knownHandles model)) $ hClose hfs . QSM.concrete
 
           return (tstTmpDir, hist, res)
 
-      QSM.prettyCommands (sm mountUnused) hist
+      QSM.prettyCommands (sm unusedHasFS) hist
         $ QSM.checkCommandNames cmds
         $ tabulate "Tags" (map show $ tag (execCmds cmds))
         $ counterexample ("Mount point: " ++ tstTmpDir)
@@ -1598,15 +1646,14 @@ tests = testGroup "Test.System.FS.StateMachine" [
     $ testProperty "regression_removeFileOnDir" $ runCmds regression_removeFileOnDir
     ]
 
--- | Unused mount mount
+-- | Unused HasFS
 --
--- 'forAllCommands' wants the entire state machine as argument, but we
--- need the mount point only when /executing/ the commands in IO. We can
--- therefore generate the commands with a dummy mount point, and then
--- inside the property construct a temporary directory which we can use
--- for execution.
-mountUnused :: MountPoint
-mountUnused = error "mount point not used during command generation"
+-- 'forAllCommands' wants the entire state machine as argument, but we need the
+-- HasFS only when /executing/ the commands in IO. We can therefore generate the
+-- commands with a dummy HasFS, and then inside the property construct a
+-- temporary directory which we can use for execution.
+unusedHasFS :: HasFS m h
+unusedHasFS = error "HasFS not used during command generation"
 
 -- | The error numbers returned by Linux vs. MacOS differ when using
 -- 'removeFile' on a directory. The model mainly mimicks Linux-style errors,
@@ -1662,7 +1709,7 @@ _showTaggedShrinks hasRequiredTags numLevels = go 0
         return ()
       where
         tags    = tag $ execCmds cmds
-        shrinks = QSM.shrinkCommands (sm mountUnused) cmds
+        shrinks = QSM.shrinkCommands (sm unusedHasFS) cmds
 
 {-------------------------------------------------------------------------------
   Pretty-printing

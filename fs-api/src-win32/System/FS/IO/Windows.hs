@@ -1,8 +1,8 @@
 {-# OPTIONS_GHC -Wno-dodgy-imports #-}
 
--- | This is meant to be used for the implementation of HasFS instances and not
--- directly by client code.
-module System.FS.IO.Internal (
+-- | This module is mainly meant to be used for the 'IO' implementation of
+-- 'System.FS.API.HasFS'.
+module System.FS.IO.Windows (
     FHandle
   , close
   , getSize
@@ -12,7 +12,6 @@ module System.FS.IO.Internal (
   , pwriteBuf
   , read
   , readBuf
-  , sameError
   , seek
   , truncate
   , write
@@ -27,9 +26,9 @@ import           Data.ByteString
 import           Data.ByteString.Internal as Internal
 import           Data.Word (Word32, Word64, Word8)
 import           Foreign (Int64, Ptr)
-import           System.FS.API.Types (AllowExisting (..), FsError (..),
-                     FsErrorType (..), OpenMode (..), SeekMode (..))
-import           System.FS.IO.Internal.Handle
+import           System.FS.API.Types (AllowExisting (..), OpenMode (..),
+                     SeekMode (..))
+import           System.FS.IO.Handle
 import           System.Posix.Types
 import           System.Win32
 
@@ -129,28 +128,3 @@ close fh = closeHandleOS fh closeHandle
 getSize :: FHandle -> IO Word64
 getSize fh = withOpenHandle "getSize" fh $ \h ->
   bhfiSize <$> getFileInformationByHandle h
-
--- | For the following error types, our mock FS implementation (and the Posix
--- implementation) throw the same errors:
---
--- * 'FsReachedEOF'
--- * 'FsDeviceFull'
--- * 'FsResourceAlreadyInUse'
---
--- For other cases, Windows throws different errors than the mock FS
--- implementation.
-sameError :: FsError -> FsError -> Bool
-sameError e1 e2 = fsErrorPath e1 == fsErrorPath e2
-               && sameFsErrorType (fsErrorType e1) (fsErrorType e2)
-  where
-    sameFsErrorType ty1 ty2 = case (ty1, ty2) of
-      (FsReachedEOF,           FsReachedEOF)           -> True
-      (FsReachedEOF,           _)                      -> False
-      (_,                      FsReachedEOF)           -> False
-      (FsDeviceFull,           FsDeviceFull)           -> True
-      (FsDeviceFull,           _)                      -> False
-      (_,                      FsDeviceFull)           -> False
-      (FsResourceAlreadyInUse, FsResourceAlreadyInUse) -> True
-      (FsResourceAlreadyInUse, _)                      -> False
-      (_,                      FsResourceAlreadyInUse) -> False
-      (_,                      _)                      -> True

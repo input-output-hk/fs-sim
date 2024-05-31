@@ -1,9 +1,9 @@
 {-# LANGUAGE CPP            #-}
 {-# LANGUAGE PackageImports #-}
 
--- | This is meant to be used for the implementation of HasFS instances and not
--- directly by client code.
-module System.FS.IO.Internal (
+-- | This module is mainly meant to be used for the 'IO' implementation of
+-- 'System.FS.API.HasFS'.
+module System.FS.IO.Unix (
     FHandle
   , close
   , getSize
@@ -13,7 +13,6 @@ module System.FS.IO.Internal (
   , pwriteBuf
   , read
   , readBuf
-  , sameError
   , seek
   , truncate
   , write
@@ -30,8 +29,7 @@ import           Data.Word (Word32, Word64, Word8)
 import           Foreign (Ptr)
 import           System.FS.API.Types (AllowExisting (..), OpenMode (..),
                      SeekMode (..))
-import           System.FS.IO.Internal.Error (sameError)
-import           System.FS.IO.Internal.Handle
+import           System.FS.IO.Handle
 import qualified System.Posix as Posix
 import           System.Posix (ByteCount, Fd (..), FileOffset)
 import qualified System.Posix.IO.ByteString.Ext as Posix (fdPreadBuf,

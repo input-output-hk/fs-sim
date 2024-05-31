@@ -35,8 +35,7 @@ library
     System.FS.Condense
     System.FS.CRC
     System.FS.IO
-    System.FS.IO.Internal
-    System.FS.IO.Internal.Handle
+    System.FS.IO.Handle
 
   default-language: Haskell2010
   build-depends:
@@ -52,22 +51,17 @@ library
     , text        >=1.2  && <2.2
 
   if os(windows)
-    hs-source-dirs: src-win32
-    build-depends:  Win32 >=2.6.1.0
+    hs-source-dirs:  src-win32
+    exposed-modules: System.FS.IO.Windows
+    build-depends:   Win32 >=2.6.1.0
 
+  -- every other distribution is handled like it is Unix-based
   else
     hs-source-dirs:  src-unix
+    exposed-modules: System.FS.IO.Unix
     build-depends:
       , unix
       , unix-bytestring  >=0.4.0
-
-    exposed-modules: System.FS.IO.Internal.Error
-
-    if os(linux)
-      hs-source-dirs: src-linux
-
-    else
-      hs-source-dirs: src-macos
 
   ghc-options:
     -Wall -Wcompat -Wincomplete-uni-patterns
