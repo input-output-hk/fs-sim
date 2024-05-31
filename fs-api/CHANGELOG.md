@@ -25,6 +25,13 @@
   `hGetBufExactly`, `hGetBufExactlyAt`, `hPutBufExactly`,  and
   `hPutBufExactlyAt`.
 * `NFData` instances for `FsPath`, `HasFS` and `Handle`.
+* Add 'FsPath' combinators: `(<.>)` and `addExtension`, `(</>)` and `combine.
+
+### Patch
+
+* Add a clarification in the documentation of `fsPathFromList` that each path
+  component should be non-empty, because directories/files with empty names are
+  not valid! Also, add an `assert`ion to `fsPathFromList` for this precondition.
 
 ## 0.2.0.1 -- 2023-10-30
 

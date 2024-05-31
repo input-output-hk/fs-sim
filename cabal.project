@@ -24,6 +24,9 @@ tests: True
 test-show-details: direct
 benchmarks: True
 
+-- comment me if you are benchmarking
+import: cabal.project.debug
+
 if impl(ghc >=9.8)
   allow-newer:
     -- https://github.com/wrengr/unix-bytestring/pull/46
