@@ -1,11 +1,9 @@
 {-# LANGUAGE DataKinds                  #-}
 {-# LANGUAGE DeriveGeneric              #-}
-{-# LANGUAGE DerivingStrategies         #-}
 {-# LANGUAGE DerivingVia                #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
-{-# LANGUAGE StandaloneDeriving         #-}
 
 -- For Show Errno and Condense SeekMode instances
 {-# OPTIONS_GHC -Wno-orphans #-}
@@ -45,7 +43,7 @@ module System.FS.API.Types (
   , ioToFsErrorType
   ) where
 
-import           Control.DeepSeq (force)
+import           Control.DeepSeq (NFData (..), force)
 import           Control.Exception
 import           Data.Function (on)
 import           Data.List (intercalate, stripPrefix)
@@ -100,6 +98,7 @@ allowExisting openMode = case openMode of
 -- | A relative path.
 newtype FsPath = UnsafeFsPath { fsPathToList :: [Strict.Text] }
   deriving (Eq, Ord, Generic)
+  deriving newtype NFData
 
 fsPathFromList :: [Strict.Text] -> FsPath
 fsPathFromList = UnsafeFsPath . force
@@ -183,6 +182,9 @@ data Handle h = Handle {
     , handlePath :: !FsPath
     }
   deriving (Generic)
+
+instance NFData h => NFData (Handle h) where
+    rnf (Handle handleRaw handlePath) = rnf handleRaw `seq` rnf handlePath
 
 instance Eq h => Eq (Handle h) where
   (==) = (==) `on` handleRaw

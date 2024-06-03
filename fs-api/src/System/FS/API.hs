@@ -7,6 +7,7 @@
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TemplateHaskell            #-}
 
 -- | An abstract view over the filesystem.
 module System.FS.API (
@@ -27,6 +28,7 @@ module System.FS.API (
   , hPutBufExactlyAt
   ) where
 
+import           Control.DeepSeq (NFData (..))
 import           Control.Monad.Class.MonadThrow
 import           Control.Monad.Primitive (PrimMonad (..))
 import qualified Data.ByteString as BS
@@ -34,6 +36,7 @@ import           Data.Int (Int64)
 import           Data.Primitive (MutableByteArray)
 import           Data.Set (Set)
 import           Data.Word
+import           SafeWildCards
 import           System.Posix.Types (ByteCount)
 
 import           System.FS.API.Types as Types
@@ -347,3 +350,22 @@ hPutBufExactlyAt hbfs h buf bufOff c off = go c off bufOff
         else go remainingCount'
                 (currentOffset + fromIntegral writtenBytes)
                 (currentBufOff + fromIntegral writtenBytes)
+
+{-------------------------------------------------------------------------------
+  Other
+--------------------------------------------------------------------------------}
+
+-- Without this, the module won't compile because the instance below is in the
+-- same declaration group as the datatype definition. For more info, see
+-- https://blog.monadfix.com/th-groups.
+$(pure[])
+
+instance NFData (HasFS m h) where
+  rnf $(fields 'HasFS) =
+      dumpState `seq` hOpen `seq` hClose `seq` hIsOpen `seq` hSeek `seq`
+      hGetSome `seq`hGetSomeAt `seq` hPutSome `seq` hTruncate `seq`
+      hGetSize `seq` createDirectory `seq` createDirectoryIfMissing `seq`
+      listDirectory `seq` doesDirectoryExist `seq` doesFileExist `seq`
+      removeDirectoryRecursive `seq` removeFile `seq` renameFile `seq`
+      mkFsErrorPath `seq` unsafeToFilePath `seq` hGetBufSome `seq`
+      hGetBufSomeAt `seq` hPutBufSome `seq` hPutBufSomeAt `seq` ()

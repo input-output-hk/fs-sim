@@ -24,6 +24,7 @@
 * Add compound functions, built from the new primitives in `HasFS`:
   `hGetBufExactly`, `hGetBufExactlyAt`, `hPutBufExactly`,  and
   `hPutBufExactlyAt`.
+* `NFData` instances for `FsPath`, `HasFS` and `Handle`.
 
 ## 0.2.0.1 -- 2023-10-30
 
