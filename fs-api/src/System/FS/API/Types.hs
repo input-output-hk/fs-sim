@@ -22,6 +22,10 @@ module System.FS.API.Types (
   , fsPathToList
   , fsToFilePath
   , mkFsPath
+  , (<.>)
+  , addExtension
+  , (</>)
+  , combine
     -- ** opaque
   , FsPath
     -- * Handles
@@ -49,13 +53,14 @@ import           Data.Function (on)
 import           Data.List (intercalate, stripPrefix)
 import           Data.Maybe (isJust)
 import qualified Data.Text as Strict
+import qualified Data.Text as Text
 import           Data.Word
 import           Foreign.C.Error (Errno (..))
 import qualified Foreign.C.Error as C
 import           GHC.Generics (Generic)
 import qualified GHC.IO.Exception as GHC
 import           GHC.Show (showCommaSpace)
-import           System.FilePath
+import qualified System.FilePath as FilePath
 import           System.IO (SeekMode (..))
 import qualified System.IO.Error as IO
 
@@ -100,8 +105,10 @@ newtype FsPath = UnsafeFsPath { fsPathToList :: [Strict.Text] }
   deriving (Eq, Ord, Generic)
   deriving newtype NFData
 
+-- | Create a path from a list of directory/file names. All of the names should
+-- be non-empty.
 fsPathFromList :: [Strict.Text] -> FsPath
-fsPathFromList = UnsafeFsPath . force
+fsPathFromList xs = assert (not (any Strict.null xs)) $ UnsafeFsPath (force xs)
 
 instance Show FsPath where
   show = intercalate "/" . map Strict.unpack . fsPathToList
@@ -130,6 +137,44 @@ fsPathInit fp = case fsPathSplit fp of
                   Nothing       -> error $ "fsPathInit: empty path"
                   Just (fp', _) -> fp'
 
+-- | An alias for '<.>'.
+addExtension :: FsPath -> String -> FsPath
+addExtension = (<.>)
+
+infixr 7 <.>
+-- | Add an extension, even if there is already one there.
+--
+-- This works similarly to 'Filepath.<.>'.
+(<.>) :: FsPath -> String -> FsPath
+path <.> [] = path
+path <.> ext = case fsPathSplit path of
+    Nothing          -> mkFsPath [ext']
+    Just (dir, file) -> dir </> UnsafeFsPath [file `Text.append` Text.pack ext']
+  where
+    ext' = case ext of
+      '.':_ -> ext
+      _     -> '.':ext
+
+-- | An alias for '</>'.
+combine :: FsPath -> FsPath -> FsPath
+combine = (</>)
+
+infixr 5 </>
+-- | Combine two paths with a path separator.
+--
+-- This works similarly to 'Filepath.</>', but since the arguments are
+-- relative paths, the corner cases for 'FilePath.</>' do not apply.
+-- Specifically, the second path will never start with a path separator or a
+-- drive letter, so the result is simply the concatenation of the two paths.
+--
+-- If either operand is empty, the other operand is returned. The result of
+-- combining two empty paths is the empty path
+(</>) :: FsPath -> FsPath -> FsPath
+UnsafeFsPath x </> UnsafeFsPath y = case (x, y) of
+    ([], _) -> UnsafeFsPath y
+    (_, []) -> UnsafeFsPath x
+    _       -> fsPathFromList (x ++ y)
+
 -- | Mount point
 --
 -- 'FsPath's are not absolute paths, but must be interpreted with respect to
@@ -138,11 +183,11 @@ newtype MountPoint = MountPoint FilePath
 
 fsToFilePath :: MountPoint -> FsPath -> FilePath
 fsToFilePath (MountPoint mp) fp =
-    mp </> foldr (</>) "" (map Strict.unpack $ fsPathToList fp)
+    mp FilePath.</> foldr (FilePath.</>) "" (map Strict.unpack $ fsPathToList fp)
 
 fsFromFilePath :: MountPoint -> FilePath -> Maybe FsPath
 fsFromFilePath (MountPoint mp) path = mkFsPath <$>
-    stripPrefix (splitDirectories mp) (splitDirectories path)
+    stripPrefix (FilePath.splitDirectories mp) (FilePath.splitDirectories path)
 
 -- | For better error reporting to the end user, we want to include the
 -- mount point of the file. But the mountpoint may not always be available,

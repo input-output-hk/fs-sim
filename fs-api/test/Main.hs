@@ -1,9 +1,11 @@
 module Main (main) where
 
-import           Test.System.FS.IO
+import qualified Test.System.FS.API.FsPath
+import qualified Test.System.FS.IO
 import           Test.Tasty
 
 main :: IO ()
 main = defaultMain $ testGroup "fs-api-test" [
-      Test.System.FS.IO.tests
+      Test.System.FS.API.FsPath.tests
+    , Test.System.FS.IO.tests
     ]
