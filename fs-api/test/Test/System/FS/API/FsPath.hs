@@ -19,8 +19,16 @@ tests = testGroup "Test.System.FS.API.FsPath" [
 
 -- | Orphan instance that generates a __non-empty__ text!
 instance Arbitrary Text where
-  arbitrary = Text.pack <$> (arbitrary `suchThat` (not . null))
-  shrink x = [Text.pack x'' | let x' = Text.unpack x, x'' <- shrink x']
+  arbitrary = Text.pack <$> QC.listOf (QC.elements validChars) `suchThat` (not . null)
+  shrink x = [ x''' | let x' = Text.unpack x
+                    , x'' <- shrink x'
+                    , not (null x'')
+                    , let x''' = Text.pack x'' ]
+
+-- | We pick a small subset of characters to use in directory/file names, so
+-- that we don't break the invariant of 'FsPath'.
+validChars :: [Char]
+validChars = concat [['a'..'z'], ['A'..'Z'], ['0'..'9']]
 
 -- | Commutativity property for 'FS.</>' and 'FilePath.</>'.
 --
@@ -65,7 +73,7 @@ prop_addExtensionCommutes mnt path ext =
     .&&. FilePath.makeValid lhs === FilePath.makeValid rhs
   where
     mnt' = filePathFromList mnt
-    mnt'' = FS.MountPoint (filePathFromList mnt)
+    mnt'' = FS.MountPoint mnt'
     fsp = FS.fsPathFromList path FS.<.> ext
     lhs = FS.fsToFilePath mnt'' fsp
     rhs = mnt' FilePath.</> filePathFromList path FilePath.<.> ext

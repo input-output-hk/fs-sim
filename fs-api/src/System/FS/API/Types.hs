@@ -101,6 +101,26 @@ allowExisting openMode = case openMode of
 -------------------------------------------------------------------------------}
 
 -- | A relative path.
+--
+-- === Invariant
+--
+-- The user of this library is tasked with picking sensible names of
+-- directories/files on a path. Amongst others, the following should hold:
+--
+-- * Names are non-empty
+--
+-- * Names are monotonic, i.e., they are not equal to @..@
+--
+-- * Names should not contain path separators or drive letters
+--
+-- In particular, names that satisfy these invariants should result in an
+-- 'FsPath' that remains relative to the HasFS instance root. For example, an
+-- @'FsPath' ["/"]@ would try to access the root folder, which is most likely
+-- outside of the scope of the HasFS instance.
+--
+-- \"@..@\" should not be used because @fs-sim@ will not be able to follow these
+-- types of back-links. @fs-sim@ will interpret \"@..@\" as a directory name
+-- instead.
 newtype FsPath = UnsafeFsPath { fsPathToList :: [Strict.Text] }
   deriving (Eq, Ord, Generic)
   deriving newtype NFData
@@ -108,7 +128,7 @@ newtype FsPath = UnsafeFsPath { fsPathToList :: [Strict.Text] }
 -- | Create a path from a list of directory/file names. All of the names should
 -- be non-empty.
 fsPathFromList :: [Strict.Text] -> FsPath
-fsPathFromList xs = assert (not (any Strict.null xs)) $ UnsafeFsPath (force xs)
+fsPathFromList xs = UnsafeFsPath (force xs)
 
 instance Show FsPath where
   show = intercalate "/" . map Strict.unpack . fsPathToList

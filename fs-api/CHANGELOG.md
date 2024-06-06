@@ -29,9 +29,8 @@
 
 ### Patch
 
-* Add a clarification in the documentation of `fsPathFromList` that each path
-  component should be non-empty, because directories/files with empty names are
-  not valid! Also, add an `assert`ion to `fsPathFromList` for this precondition.
+* Add a clarification in the documentation of `FsPath` that the user is
+  responsible for picking sensible directory/file names.
 
 ## 0.2.0.1 -- 2023-10-30
 
