@@ -25,7 +25,7 @@
   `hGetBufExactly`, `hGetBufExactlyAt`, `hPutBufExactly`,  and
   `hPutBufExactlyAt`.
 * `NFData` instances for `FsPath`, `HasFS` and `Handle`.
-* Add 'FsPath' combinators: `(<.>)` and `addExtension`, `(</>)` and `combine.
+* Add `FsPath` combinators: `(<.>)` and `addExtension`, `(</>)` and `combine`.
 
 ### Patch
 
