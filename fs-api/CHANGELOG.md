@@ -25,12 +25,13 @@
   `hGetBufExactly`, `hGetBufExactlyAt`, `hPutBufExactly`,  and
   `hPutBufExactlyAt`.
 * `NFData` instances for `FsPath`, `HasFS` and `Handle`.
-* Add 'FsPath' combinators: `(<.>)` and `addExtension`, `(</>)` and `combine.
+* Add `FsPath` combinators: `(<.>)` and `addExtension`, `(</>)` and `combine`.
 
 ### Patch
 
 * Add a clarification in the documentation of `FsPath` that the user is
   responsible for picking sensible directory/file names.
+* Bump upper version bounds for `io-classes` to `1.6`
 
 ## 0.2.0.1 -- 2023-10-30
 
