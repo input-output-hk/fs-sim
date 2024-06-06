@@ -31,6 +31,7 @@
 
 * Add a clarification in the documentation of `FsPath` that the user is
   responsible for picking sensible directory/file names.
+* Bump upper version bounds for `io-classes` to `1.6`
 
 ## 0.2.0.1 -- 2023-10-30
 
