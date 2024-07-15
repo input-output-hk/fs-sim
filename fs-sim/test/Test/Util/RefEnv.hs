@@ -1,7 +1,9 @@
 {-# LANGUAGE DeriveAnyClass      #-}
 {-# LANGUAGE DeriveGeneric       #-}
+{-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE PolyKinds           #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneDeriving  #-}
 {-# LANGUAGE TupleSections       #-}
 
 -- | Environments of QSM references.
@@ -28,10 +30,10 @@ import qualified Prelude
 import           Data.Bifunctor
 import           Data.Functor.Classes
 import           Data.List (intercalate)
-import           Data.TreeDiff (ToExpr)
 import           GHC.Generics (Generic)
 import           GHC.Stack
 import           Test.StateMachine (Reference)
+import           Test.StateMachine.TreeDiff
 import qualified Test.StateMachine.Types.Rank2 as Rank2
 
 data RefEnv k a r = RefEnv { toList :: [(Reference k r, a)] }
