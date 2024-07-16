@@ -57,6 +57,10 @@ module Test.System.FS.StateMachine (
   , tests
   ) where
 
+#if __GLASGOW_HASKELL__<910
+import           Data.Foldable (foldl')
+#endif
+
 import qualified Control.Exception as E
 import           Control.Monad
 import           Control.Monad.Primitive
@@ -69,7 +73,6 @@ import           Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import           Data.Functor.Classes
 import           Data.Int (Int64)
-import           Data.List (foldl')
 import qualified Data.List as L
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
@@ -79,7 +82,6 @@ import           Data.Proxy
 import           Data.Set (Set)
 import qualified Data.Set as Set
 import qualified Data.Text as Text
-import           Data.TreeDiff (ToExpr (..), defaultExprViaShow)
 import           Data.Word (Word64)
 import qualified Generics.SOP as SOP
 import           GHC.Generics
@@ -87,6 +89,7 @@ import           GHC.Stack hiding (prettyCallStack)
 import           System.IO.Temp (withSystemTempDirectory)
 import           System.Posix.Types (ByteCount)
 import           System.Random (getStdRandom, randomR)
+import           Test.StateMachine.TreeDiff
 import           Text.Read (readMaybe)
 import           Text.Show.Pretty (ppShow)
 
@@ -842,7 +845,7 @@ mock model cmd = At <$> bitraverse (const QSM.genSym) (const QSM.genSym) resp
 
 precondition :: Model Symbolic -> Cmd :@ Symbolic -> QSM.Logic
 precondition m@Model{..} (At cmd) =
-            QSM.forall (handles cmd) (`QSM.member` RE.keys knownHandles)
+            QSM.forAll (handles cmd) (`QSM.member` RE.keys knownHandles)
     QSM.:&& QSM.Boolean (Mock.numOpenHandles mockFS < maxNumOpenHandles)
     QSM.:&& QSM.Not (knownLimitation m (At cmd))
   where
@@ -1626,7 +1629,7 @@ runCmds cmds = QC.monadicIO $ do
               hfs   = ioHasFS mount
               sm'   = sm hfs
 
-          (hist, model, res) <- QSM.runCommands' (pure sm') cmds
+          (hist, model, res) <- QSM.runCommands' sm' cmds
 
           -- Close all open handles
           forM_ (RE.keys (knownHandles model)) $ hClose hfs . QSM.concrete
