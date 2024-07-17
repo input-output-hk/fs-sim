@@ -10,8 +10,8 @@
 -- testing error handling.
 module System.FS.Sim.Error (
     -- * Simulate Errors monad
-    mkSimErrorHasFS
-  , mkSimErrorHasFS'
+    simErrorHasFS
+  , simErrorHasFS'
   , runSimErrorFS
   , withErrors
     -- * Streams
@@ -481,22 +481,21 @@ instance Arbitrary Errors where
   Simulate Errors monad
 -------------------------------------------------------------------------------}
 
--- | Alternative to 'mkSimErrorHasFS' that creates 'TVar's internally.
-mkSimErrorHasFS' :: (MonadSTM m, MonadThrow m, PrimMonad m)
+-- | Alternative to 'simErrorHasFS' that creates 'TVar's internally.
+simErrorHasFS' :: (MonadSTM m, MonadThrow m, PrimMonad m)
                  => MockFS
                  -> Errors
                  -> m (HasFS m HandleMock)
-mkSimErrorHasFS' mockFS errs =
-    mkSimErrorHasFS <$> newTMVarIO mockFS <*> newTVarIO errs
+simErrorHasFS' mockFS errs =
+    simErrorHasFS <$> newTMVarIO mockFS <*> newTVarIO errs
 
 -- | Introduce possibility of errors
---
--- TODO: Lenses would be nice for the setters
-mkSimErrorHasFS :: forall m. (MonadSTM m, MonadThrow m, PrimMonad m)
+simErrorHasFS :: forall m. (MonadSTM m, MonadThrow m, PrimMonad m)
                 => StrictTMVar m MockFS
                 -> StrictTVar m Errors
                 -> HasFS m HandleMock
-mkSimErrorHasFS fsVar errorsVar =
+simErrorHasFS fsVar errorsVar =
+    -- TODO: Lenses would be nice for the setters
     case Sim.simHasFS fsVar of
       hfs@HasFS{..} -> HasFS{
           dumpState =
@@ -547,7 +546,7 @@ mkSimErrorHasFS fsVar errorsVar =
             withErr errorsVar p1 (renameFile p1 p2) "renameFile"
             renameFileE (\e es -> es { renameFileE = e })
         , mkFsErrorPath = fsToFsErrorPathUnmounted
-        , unsafeToFilePath = error "mkSimErrorHasFS:unsafeToFilePath"
+        , unsafeToFilePath = error "simErrorHasFS:unsafeToFilePath"
           -- File I\/O with user-supplied buffers
         , hGetBufSome   = hGetBufSomeWithErr   errorsVar hfs
         , hGetBufSomeAt = hGetBufSomeAtWithErr errorsVar hfs
@@ -565,7 +564,7 @@ runSimErrorFS :: (MonadSTM m, MonadThrow m, PrimMonad m)
 runSimErrorFS mockFS errors action = do
     fsVar     <- newTMVarIO mockFS
     errorsVar <- newTVarIO errors
-    a         <- action errorsVar $ mkSimErrorHasFS fsVar errorsVar
+    a         <- action errorsVar $ simErrorHasFS fsVar errorsVar
     fs'       <- atomically $ takeTMVar fsVar
     return (a, fs')
 

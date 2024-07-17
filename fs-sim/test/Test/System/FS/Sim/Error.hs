@@ -175,7 +175,7 @@ propPutterPutsAll getCounter put toInput (SometimesPartialWrites errStream) bs =
       fsVar <- newTMVarIO MockFS.empty
       errVar <- newTVarIO onlyPutErrors
       counters <- zeroEntryCounters
-      let hfs = withEntryCounters counters $ mkSimErrorHasFS fsVar errVar
+      let hfs = withEntryCounters counters $ simErrorHasFS fsVar errVar
       withFile hfs (mkFsPath ["file1"]) (ReadWriteMode MustBeNew) $ \h -> do
         inp <- toInput bs
         n' <- put hfs h inp
@@ -222,7 +222,7 @@ propGetterGetsAll getCounter get fromOutput (SometimesPartialReads errStream) bs
       fsVar <- newTMVarIO MockFS.empty
       errVar <- newTVarIO onlyGetErrors
       counters <- zeroEntryCounters
-      let hfs = withEntryCounters counters $ mkSimErrorHasFS fsVar errVar
+      let hfs = withEntryCounters counters $ simErrorHasFS fsVar errVar
       withFile hfs (mkFsPath ["file1"]) (ReadWriteMode MustBeNew) $ \h -> do
         n' <- Strict.hPutAllStrict hfs h bs
         let n = fromIntegral $ BS.length bs

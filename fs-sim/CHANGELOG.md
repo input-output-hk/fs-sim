@@ -20,6 +20,8 @@
   breaking changes:
   * Add a `PrimMonad m` constraint to `runSimErrorFS`, `mkSimErrorHasFS'` and `mkSimErrorHasFS`.
   * Change the `StrictTVar` argument to `mkSimErrorHasFS` to a `StrictTMVar`.
+* Rename `mkSimErrorHasFS` to `simErrorHasFS`.
+* Rename `mkSimErrorHasFS'` to `simErrorHasFS'`.
 
 ### Non-breaking
 
