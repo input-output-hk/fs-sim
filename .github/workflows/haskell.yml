@@ -22,8 +22,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["8.10.7", "9.2.8", "9.4.8", "9.6.4", "9.8.2", "9.10.1"]
-        cabal: ["3.10.3.0"]
+        ghc: ["8.10.7", "9.2.8", "9.4.8", "9.6.6", "9.8.2", "9.10.1"]
+        cabal: ["3.12.1.0"]
         os: [ubuntu-latest, windows-latest, macOS-13]
 
     timeout-minutes: 60
@@ -65,7 +65,7 @@ jobs:
 
     - name: Install cabal dependencies
       id: build-dependencies
-      run: cabal build --only-dependencies --enable-tests --enable-benchmarks all
+      run: cabal build --only-dependencies all
 
     - name: "Save cache"
       uses: actions/cache/save@v4
@@ -104,8 +104,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.6.4"]
-        cabal: ["3.10.3.0"]
+        ghc: ["9.6.6"]
+        cabal: ["3.12.1.0"]
         os: [ubuntu-latest]
 
     # Fix the index-state so we can get proper caching effects. Change this to a
@@ -171,8 +171,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.6.4"]
-        cabal: ["3.10.3.0"]
+        ghc: ["9.6.6"]
+        cabal: ["3.12.1.0"]
         os: [ubuntu-latest]
 
     # See the comment on the hackage-index-state environment variable for the
@@ -233,7 +233,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.6.4"]
+        ghc: ["9.6.6"]
         cabal: ["3.10.3.0"]
         os: [ubuntu-latest]
 
