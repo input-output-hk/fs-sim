@@ -16,10 +16,10 @@ data HasFS m h = HasFS {
 
 Code that is written using this interface can be run against any implementation
 of a file system. The `System.FS.IO` module provides a function for initialising
-a `HasFS` interface for the built-in filesystem.
+a `HasFS` interface for the real filesystem.
 
 ```haskell
-ioHasFS :: MonadIO m => MountPoint -> HasFS m HandleIO
+ioHasFS :: (MonadIO m, PrimState IO ~ PrimState m) => MountPoint -> HasFS m HandleIO
 ```
 
 Note that `ioHasFS` requires some context in the form of a `MountPoint`: the
