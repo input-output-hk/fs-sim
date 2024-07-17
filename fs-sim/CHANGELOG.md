@@ -25,6 +25,7 @@
 
 * New constructors for the `Errors` type: `hGetBufSomeE`, `hGetBufSomeAtE`,
   `hGetBufSomeE`, and `hPutBufSomeAtE`.
+* Expose the new `System.FS.Sim.Prim` module.
 
 ### Patch
 

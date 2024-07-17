@@ -30,10 +30,10 @@ library
     System.FS.Sim.Error
     System.FS.Sim.FsTree
     System.FS.Sim.MockFS
+    System.FS.Sim.Prim
     System.FS.Sim.STM
     System.FS.Sim.Stream
 
-  other-modules:    System.FS.Sim.Prim
   default-language: Haskell2010
   build-depends:
     , base               >=4.14  && <4.21
@@ -56,15 +56,9 @@ library
 
 test-suite fs-sim-test
   type:             exitcode-stdio-1.0
-  hs-source-dirs:   test src
+  hs-source-dirs:   test
   main-is:          Main.hs
   other-modules:
-    System.FS.Sim.Error
-    System.FS.Sim.FsTree
-    System.FS.Sim.MockFS
-    System.FS.Sim.Prim
-    System.FS.Sim.STM
-    System.FS.Sim.Stream
     Test.System.FS.Sim.Error
     Test.System.FS.Sim.FsTree
     Test.System.FS.StateMachine
@@ -75,20 +69,17 @@ test-suite fs-sim-test
   default-language: Haskell2010
   build-depends:
     , base
-    , base16-bytestring
     , bifunctors
     , bytestring
     , containers
     , fs-api
+    , fs-sim
     , generics-sop
-    , io-classes
-    , mtl
     , pretty-show
     , primitive
     , QuickCheck
     , quickcheck-state-machine  >=0.10
     , random
-    , safe-wild-cards
     , strict-stm
     , tasty
     , tasty-hunit
