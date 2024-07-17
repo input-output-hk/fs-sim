@@ -25,6 +25,12 @@ jobs:
         ghc: ["8.10.7", "9.2.8", "9.4.8", "9.6.6", "9.8.2", "9.10.1"]
         cabal: ["3.12.1.0"]
         os: [ubuntu-latest, windows-latest, macOS-13]
+        no-debug: [""]
+        include:
+          - ghc: "9.6.6"
+            cabal: "3.12.1.0"
+            os: ubuntu-latest
+            no-debug: "no-debug"
 
     timeout-minutes: 60
 
@@ -44,6 +50,12 @@ jobs:
       run: |
         cabal configure --enable-tests --enable-benchmark --ghc-options="-Werror" --ghc-options="-fno-ignore-asserts"
         cat cabal.project.local
+
+    - name: Configure the build (no-debug)
+      if: ${{ matrix.no-debug }}
+      run: |
+        echo "" > cabal.project.debug
+        cat cabal.project.debug
 
     - name: Record cabal dependencies
       id: record-deps
