@@ -34,6 +34,7 @@
 * The shrinker for `Errors` was not shrinking every stream.
 * Adapt to moving of `Util` modules in `fs-api`.
 * Make it build with `ghc-9.10`.
+* Tight dependency bounds.
 
 ## 0.2.1.1 -- 2023-10-30
 
