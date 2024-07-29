@@ -30,24 +30,24 @@ library
     System.FS.Sim.Error
     System.FS.Sim.FsTree
     System.FS.Sim.MockFS
+    System.FS.Sim.Prim
     System.FS.Sim.STM
     System.FS.Sim.Stream
 
-  other-modules:    System.FS.Sim.Prim
   default-language: Haskell2010
   build-depends:
-    , base               >=4.14 && <4.21
-    , base16-bytestring
-    , bytestring         >=0.10 && <0.13
-    , containers         >=0.5  && <0.8
+    , base               >=4.14  && <4.21
+    , base16-bytestring  ^>=0.1  || ^>=1.0
+    , bytestring         ^>=0.10 || ^>=0.11 || ^>=0.12
+    , containers         ^>=0.5  || ^>=0.6  || ^>=0.7
     , fs-api             ^>=0.2
-    , io-classes         >=0.3  && <1.6
-    , mtl
+    , io-classes         ^>=1.0  || ^>=1.1  || ^>=1.2  || ^>=1.3 || ^>=1.4 || ^>=1.5
+    , mtl                ^>=2.2  || ^>=2.3
     , primitive          ^>=0.9
-    , QuickCheck
+    , QuickCheck         ^>=2.13 || ^>=2.14 || ^>=2.15
     , safe-wild-cards    ^>=1.0
-    , strict-stm         >=0.3  && <1.6
-    , text               >=1.2  && <2.2
+    , strict-stm         ^>=1.0  || ^>=1.1  || ^>=1.2  || ^>=1.3 || ^>=1.4 || ^>=1.5
+    , text               ^>=1.2  || ^>=2.0  || ^>=2.1
 
   ghc-options:
     -Wall -Wcompat -Wincomplete-uni-patterns
@@ -56,15 +56,9 @@ library
 
 test-suite fs-sim-test
   type:             exitcode-stdio-1.0
-  hs-source-dirs:   test src
+  hs-source-dirs:   test
   main-is:          Main.hs
   other-modules:
-    System.FS.Sim.Error
-    System.FS.Sim.FsTree
-    System.FS.Sim.MockFS
-    System.FS.Sim.Prim
-    System.FS.Sim.STM
-    System.FS.Sim.Stream
     Test.System.FS.Sim.Error
     Test.System.FS.Sim.FsTree
     Test.System.FS.StateMachine
@@ -75,20 +69,17 @@ test-suite fs-sim-test
   default-language: Haskell2010
   build-depends:
     , base
-    , base16-bytestring
     , bifunctors
     , bytestring
     , containers
     , fs-api
+    , fs-sim
     , generics-sop
-    , io-classes
-    , mtl
     , pretty-show
     , primitive
     , QuickCheck
     , quickcheck-state-machine  >=0.10
     , random
-    , safe-wild-cards
     , strict-stm
     , tasty
     , tasty-hunit

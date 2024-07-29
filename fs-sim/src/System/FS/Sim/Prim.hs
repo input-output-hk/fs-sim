@@ -42,7 +42,7 @@ runFSSimT act !st = runExceptT $ flip runStateT st $ unFSSimT act
 --
 -- This implementation runs in a primitive monad @m@ extended with an 'FSSimT'
 -- monad transformer. It is recommended to use 'System.FS.Sim.STM.simHasFS' or
--- 'System.FS.Sim.Error.mkSimErrorHasFS' instead because they hide the monad
+-- 'System.FS.Sim.Error.simErrorHasFS' instead because they hide the monad
 -- transformer. The caveat is that @m@ should be IO-like.
 primHasMockFS :: PrimMonad m => HasFS (FSSimT m) Mock.HandleMock
 -- An alternative design could have fixed this implementation to

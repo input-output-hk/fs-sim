@@ -32,8 +32,8 @@ jobs:
       fail-fast: false
 
     env:
-      ghc: "9.2.8"
-      cabal: "3.10.2.0"
+      ghc: "9.6.6"
+      cabal: "3.12.1.0"
       os: ubuntu-latest"
 
     steps:

@@ -859,9 +859,8 @@ renameFile fpOld fpNew =
 -------------------------------------------------------------------------------}
 
 -- | Renders the 'MockFS' in a human-readable fashion.
---
--- TODO: Right now does this not show the state of the handles.
 pretty :: MockFS -> String
+-- TODO: Right now does this not show the state of the handles.
 pretty = FS.pretty renderFile . mockFiles
   where
     renderFile :: ByteString -> String
