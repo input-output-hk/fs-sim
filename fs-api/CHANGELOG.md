@@ -1,10 +1,9 @@
 # Revision history for fs-api
 
-## next release -- ????-??-??
+## 0.3.0.0 -- 2024-08-26
 
 ### Breaking
 
-* New `primitive ^>=0.9` dependency
 * Remove orphan `Show` instance for `Foreign.C.Error.Errno`.
 * Provide implementations for the new primitives in the `IO` implementation of
   `HasFS`. As a result, `ioHasFS` now requires that `PrimState IO ~ PrimState m`.
@@ -33,6 +32,7 @@
   responsible for picking sensible directory/file names.
 * Bump upper version bounds for `io-classes` to `1.6`
 * Make it build with `ghc-9.10`.
+* New `primitive ^>=0.9` dependency
 * Tight dependency bounds.
 
 ## 0.2.0.1 -- 2023-10-30

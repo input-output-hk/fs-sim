@@ -1,12 +1,10 @@
 # Revision history for fs-sim
 
-## next version -- ????-??-??
+## 0.3.0.0 -- 2024-08-26
 
 ### Breaking
 
 * Orphan `Show` instance for `Foreign.C.Error.Errno` removed by `fs-api`.
-* New `primitive ^>=0.9` dependency
-* New `safe-wild-cards^>=1.0`dependency
 * Rename some functions related to partial reads/writes and corruption in `System.FS.Sim.Error`:
   * Replace `hGetSomePartial` by `partialiseByteCount`/`partialiseWord64`.
   * Replace `hPutSomePartial` by `partialiseByteString`
@@ -37,6 +35,8 @@
 * The shrinker for `Errors` was not shrinking every stream.
 * Adapt to moving of `Util` modules in `fs-api`.
 * Make it build with `ghc-9.10`.
+* New `primitive ^>=0.9` dependency
+* New `safe-wild-cards^>=1.0`dependency
 * Tight dependency bounds.
 
 ## 0.2.1.1 -- 2023-10-30
