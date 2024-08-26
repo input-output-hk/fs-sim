@@ -11,6 +11,8 @@ license-files:
 copyright:       2019-2024 Input Output Global Inc (IOG)
 author:          IOG Engineering Team
 maintainer:      operations@iohk.io, Joris Dral (joris@well-typed.com)
+homepage:        https://github.com/input-output-hk/fs-sim
+bug-reports:     https://github.com/input-output-hk/fs-sim/issues
 category:        Testing
 build-type:      Simple
 extra-doc-files:
