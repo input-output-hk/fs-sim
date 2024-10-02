@@ -1,5 +1,14 @@
 # Revision history for fs-sim
 
+## 0.3.0.1 -- 2024-10-02
+
+### Patch
+
+* Support `io-classes-1.6` and `io-classes-1.7`. In these versions, `strict-stm`
+  has become a public sub-library of `io-classes`. As a result, older versions
+  of `io-classes` are no longer supported, and we now depend on
+  `io-classes:strict-stm` instead of `strict-stm`.
+
 ## 0.3.0.0 -- 2024-08-26
 
 ### Breaking
