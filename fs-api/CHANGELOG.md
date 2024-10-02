@@ -1,5 +1,12 @@
 # Revision history for fs-api
 
+## 0.3.0.1 -- 2024-10-02
+
+### Patch
+
+* Support `io-classes-1.6` and `io-classes-1.7`. Older versions of `io-classes`
+  are no longer supported.
+
 ## 0.3.0.0 -- 2024-08-26
 
 ### Breaking
