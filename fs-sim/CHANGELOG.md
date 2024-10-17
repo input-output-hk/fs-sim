@@ -1,5 +1,11 @@
 # Revision history for fs-sim
 
+## Next version -- ????-??-??
+
+### Non-breaking
+
+* Expose `openHandles` for testing.
+
 ## 0.3.0.1 -- 2024-10-02
 
 ### Patch
