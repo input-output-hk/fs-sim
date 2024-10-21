@@ -22,6 +22,7 @@ module System.FS.Sim.MockFS (
   , example
   , handleIsOpen
   , numOpenHandles
+  , openHandles
   , pretty
     -- * Debugging
   , dumpState
