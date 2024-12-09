@@ -452,30 +452,32 @@ genErrors genPartialWrites genSubstituteWithJunk = do
 instance Arbitrary Errors where
   arbitrary = genErrors True True
 
-  shrink err@($(fields 'Errors)) = concatMap (filter (not . allNull))
-      [ (\s' -> err { dumpStateE = s' })                <$> Stream.shrinkStream dumpStateE
-      , (\s' -> err { hOpenE = s' })                    <$> Stream.shrinkStream hOpenE
-      , (\s' -> err { hCloseE = s' })                   <$> Stream.shrinkStream hCloseE
-      , (\s' -> err { hSeekE = s' })                    <$> Stream.shrinkStream hSeekE
-      , (\s' -> err { hGetSomeE = s' })                 <$> Stream.shrinkStream hGetSomeE
-      , (\s' -> err { hGetSomeAtE = s' })               <$> Stream.shrinkStream hGetSomeAtE
-      , (\s' -> err { hPutSomeE = s' })                 <$> Stream.shrinkStream hPutSomeE
-      , (\s' -> err { hTruncateE = s' })                <$> Stream.shrinkStream hTruncateE
-      , (\s' -> err { hGetSizeE = s' })                 <$> Stream.shrinkStream hGetSizeE
-      , (\s' -> err { createDirectoryE = s' })          <$> Stream.shrinkStream createDirectoryE
-      , (\s' -> err { createDirectoryIfMissingE = s' }) <$> Stream.shrinkStream createDirectoryIfMissingE
-      , (\s' -> err { listDirectoryE = s' })            <$> Stream.shrinkStream listDirectoryE
-      , (\s' -> err { doesDirectoryExistE = s' })       <$> Stream.shrinkStream doesDirectoryExistE
-      , (\s' -> err { doesFileExistE = s' })            <$> Stream.shrinkStream doesFileExistE
-      , (\s' -> err { removeDirectoryRecursiveE = s' }) <$> Stream.shrinkStream removeDirectoryRecursiveE
-      , (\s' -> err { removeFileE = s' })               <$> Stream.shrinkStream removeFileE
-      , (\s' -> err { renameFileE = s' })               <$> Stream.shrinkStream renameFileE
-        -- File I\/O with user-supplied buffers
-      , (\s' -> err { hGetBufSomeE = s' })   <$> Stream.shrinkStream hGetBufSomeE
-      , (\s' -> err { hGetBufSomeAtE = s' }) <$> Stream.shrinkStream hGetBufSomeAtE
-      , (\s' -> err { hPutBufSomeE = s' })   <$> Stream.shrinkStream hPutBufSomeE
-      , (\s' -> err { hPutBufSomeAtE = s' }) <$> Stream.shrinkStream hPutBufSomeAtE
-      ]
+  shrink err@($(fields 'Errors))
+    | allNull err = []
+    | otherwise = emptyErrors : concatMap (filter (not . allNull))
+        [ (\s' -> err { dumpStateE = s' })                <$> Stream.shrinkStream dumpStateE
+        , (\s' -> err { hOpenE = s' })                    <$> Stream.shrinkStream hOpenE
+        , (\s' -> err { hCloseE = s' })                   <$> Stream.shrinkStream hCloseE
+        , (\s' -> err { hSeekE = s' })                    <$> Stream.shrinkStream hSeekE
+        , (\s' -> err { hGetSomeE = s' })                 <$> Stream.shrinkStream hGetSomeE
+        , (\s' -> err { hGetSomeAtE = s' })               <$> Stream.shrinkStream hGetSomeAtE
+        , (\s' -> err { hPutSomeE = s' })                 <$> Stream.shrinkStream hPutSomeE
+        , (\s' -> err { hTruncateE = s' })                <$> Stream.shrinkStream hTruncateE
+        , (\s' -> err { hGetSizeE = s' })                 <$> Stream.shrinkStream hGetSizeE
+        , (\s' -> err { createDirectoryE = s' })          <$> Stream.shrinkStream createDirectoryE
+        , (\s' -> err { createDirectoryIfMissingE = s' }) <$> Stream.shrinkStream createDirectoryIfMissingE
+        , (\s' -> err { listDirectoryE = s' })            <$> Stream.shrinkStream listDirectoryE
+        , (\s' -> err { doesDirectoryExistE = s' })       <$> Stream.shrinkStream doesDirectoryExistE
+        , (\s' -> err { doesFileExistE = s' })            <$> Stream.shrinkStream doesFileExistE
+        , (\s' -> err { removeDirectoryRecursiveE = s' }) <$> Stream.shrinkStream removeDirectoryRecursiveE
+        , (\s' -> err { removeFileE = s' })               <$> Stream.shrinkStream removeFileE
+        , (\s' -> err { renameFileE = s' })               <$> Stream.shrinkStream renameFileE
+          -- File I\/O with user-supplied buffers
+        , (\s' -> err { hGetBufSomeE = s' })   <$> Stream.shrinkStream hGetBufSomeE
+        , (\s' -> err { hGetBufSomeAtE = s' }) <$> Stream.shrinkStream hGetBufSomeAtE
+        , (\s' -> err { hPutBufSomeE = s' })   <$> Stream.shrinkStream hPutBufSomeE
+        , (\s' -> err { hPutBufSomeAtE = s' }) <$> Stream.shrinkStream hPutBufSomeAtE
+        ]
 
 {-------------------------------------------------------------------------------
   Simulate Errors monad

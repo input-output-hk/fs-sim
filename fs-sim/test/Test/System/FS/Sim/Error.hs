@@ -143,6 +143,8 @@ tests = testGroup "Test.System.FS.Sim.Error" [
 
     -- Generators and shrinkers
 
+    , testProperty "prop_regression_shrinkErrors"
+        prop_regression_shrinkErrors
     , testProperty "prop_regression_shrinkNonEmptyErrors"
         prop_regression_shrinkNonEmptyErrors
     , testProperty "prop_regression_shrinkEmptyErrors"
@@ -253,6 +255,11 @@ propGetterGetsAll getCounter get fromOutput (SometimesPartialReads errStream) bs
 {-------------------------------------------------------------------------------
   Generators and shrinkers
 -------------------------------------------------------------------------------}
+
+-- | See fs-sim#84
+prop_regression_shrinkErrors :: Errors -> Property
+prop_regression_shrinkErrors _errs = expectFailure $
+    property False
 
 -- | See fs-sim#84
 prop_regression_shrinkNonEmptyErrors :: Errors -> Property
