@@ -259,7 +259,14 @@ prop_regression_shrinkNonEmptyErrors :: Errors -> Property
 prop_regression_shrinkNonEmptyErrors errs = expectFailure $
     not (allNull errs) ==> property False
 
+newtype EmptyErrors = EmptyErrors Errors
+  deriving Show
+
+instance Arbitrary EmptyErrors where
+  arbitrary = EmptyErrors <$> oneof [ pure emptyErrors ]
+  shrink (EmptyErrors errs) = EmptyErrors <$> shrink errs
+
 -- | See fs-sim#84
-prop_regression_shrinkEmptyErrors :: Errors -> Property
-prop_regression_shrinkEmptyErrors errs = expectFailure $
+prop_regression_shrinkEmptyErrors :: EmptyErrors -> Property
+prop_regression_shrinkEmptyErrors (EmptyErrors errs) = expectFailure $
     allNull errs ==> property False

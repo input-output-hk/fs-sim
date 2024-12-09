@@ -165,4 +165,4 @@ genFinite n gen = Stream Finite <$> replicateM n gen
 genInfinite ::
      Gen (Maybe a)  -- ^ Tip: use 'genMaybe'.
   -> Gen (Stream a)
-genInfinite gen = Stream Infinite <$> QC.listOf gen
+genInfinite gen = Stream Infinite <$> QC.infiniteListOf gen
