@@ -1,10 +1,15 @@
 # Revision history for fs-sim
 
-## Next version -- ????-??-??
+## 0.3.1.0 -- 2024-12-10
 
 ### Non-breaking
 
 * Expose `openHandles` for testing.
+
+### Patch
+
+* Make `genInfinite` generate truly infinite streams.
+* The shrinker for `Errors` now truly shrinks towards empty errors.
 
 ## 0.3.0.1 -- 2024-10-02
 

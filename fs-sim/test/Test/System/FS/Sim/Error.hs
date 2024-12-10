@@ -140,6 +140,15 @@ tests = testGroup "Test.System.FS.Sim.Error" [
                 MockFS.fromBuffer mba 0 (fromIntegral $ BS.length bs) >>=
                   maybe (error "fromOutput: should not fail") pure
         in  propGetterGetsAll hGetBufSomeAtC get fromOutput p bs
+
+    -- Generators and shrinkers
+
+    , testProperty "prop_regression_shrinkErrors"
+        prop_regression_shrinkErrors
+    , testProperty "prop_regression_shrinkNonEmptyErrors"
+        prop_regression_shrinkNonEmptyErrors
+    , testProperty "prop_regression_shrinkEmptyErrors"
+        prop_regression_shrinkEmptyErrors
     ]
 
 instance Arbitrary BS.ByteString where
@@ -242,3 +251,29 @@ propGetterGetsAll getCounter get fromOutput (SometimesPartialReads errStream) bs
       , hGetBufSomeE = errStream
       , hGetBufSomeAtE = errStream
       }
+
+{-------------------------------------------------------------------------------
+  Generators and shrinkers
+-------------------------------------------------------------------------------}
+
+-- | See fs-sim#84
+prop_regression_shrinkErrors :: Errors -> Property
+prop_regression_shrinkErrors _errs = expectFailure $
+    property False
+
+-- | See fs-sim#84
+prop_regression_shrinkNonEmptyErrors :: Errors -> Property
+prop_regression_shrinkNonEmptyErrors errs = expectFailure $
+    not (allNull errs) ==> property False
+
+newtype EmptyErrors = EmptyErrors Errors
+  deriving Show
+
+instance Arbitrary EmptyErrors where
+  arbitrary = EmptyErrors <$> oneof [ pure emptyErrors ]
+  shrink (EmptyErrors errs) = EmptyErrors <$> shrink errs
+
+-- | See fs-sim#84
+prop_regression_shrinkEmptyErrors :: EmptyErrors -> Property
+prop_regression_shrinkEmptyErrors (EmptyErrors errs) = expectFailure $
+    allNull errs ==> property False
