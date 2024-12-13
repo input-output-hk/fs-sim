@@ -83,8 +83,11 @@ data AllowExisting
     -- ^ The file may already exist. If it does, it is reopened. If it
     -- doesn't, it is created.
   | MustBeNew
-    -- ^ The file may not yet exist. If it does, an error
+    -- ^ The file must not yet exist. If it does, an error
     -- ('FsResourceAlreadyExist') is thrown.
+  | MustExist
+    -- ^ The file must already exist. If it does not, an error
+    -- ('FsResourceDoesNotExist') is thrown.
   deriving (Eq, Show)
 
 allowExisting :: OpenMode -> AllowExisting
@@ -453,6 +456,7 @@ ioToFsErrorType ioErr = case Errno <$> GHC.ioe_errno ioErr of
 instance Condense AllowExisting where
   condense AllowExisting = ""
   condense MustBeNew     = "!"
+  condense MustExist     = "+"
 
 instance Condense OpenMode where
     condense ReadMode           = "r"

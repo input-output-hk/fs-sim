@@ -60,6 +60,7 @@ open filename openMode = do
       ReadWriteMode ex -> (gENERIC_READ .|. gENERIC_WRITE, createNew ex)
     createNew AllowExisting = oPEN_ALWAYS
     createNew MustBeNew     = cREATE_NEW
+    createNew MustExist     = oPEN_ALWAYS
 
 write :: FHandle -> Ptr Word8 -> Int64 -> IO Word32
 write fh data' bytes = withOpenHandle "write" fh $ \h ->

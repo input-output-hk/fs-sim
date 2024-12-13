@@ -479,7 +479,11 @@ hOpen fp openMode = do
       , fsLimitation  = True
       }
     modifyMockFS $ \fs -> do
-      let alreadyHasWriter =
+      let assumedExistance (WriteMode MustExist) = True
+          assumedExistance (AppendMode MustExist) = True
+          assumedExistance (ReadWriteMode MustExist) = True
+          assumedExistance _ = False
+          alreadyHasWriter =
             any (\hs -> openFilePath hs == fp && isWriteHandle hs) $
             openHandles fs
       when (openMode /= ReadMode && alreadyHasWriter) $
@@ -491,7 +495,7 @@ hOpen fp openMode = do
           , fsErrorStack  = prettyCallStack
           , fsLimitation  = True
           }
-      when (openMode == ReadMode) $ void $
+      when (openMode == ReadMode || assumedExistance openMode) $ void $
         checkFsTree $ FS.getFile fp (mockFiles fs)
       files' <- checkFsTree $ FS.openFile fp ex (mockFiles fs)
       return $ newHandle (fs { mockFiles = files' })

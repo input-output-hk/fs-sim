@@ -676,7 +676,7 @@ generator Model{..} = oneof $ concat [
         (rf, wf) = if fileExists then (10,3) else (1,3)
 
     genAllowExisting :: Gen AllowExisting
-    genAllowExisting = elements [AllowExisting, MustBeNew]
+    genAllowExisting = elements [AllowExisting, MustBeNew, MustExist]
 
     genSeekMode :: Gen SeekMode
     genSeekMode = elements [
@@ -1055,12 +1055,20 @@ data Tag =
   -- > Get ..
   | TagPutSeekNegGet
 
+
   -- Open with MustBeNew (O_EXCL flag), but the file already existed.
   --
   -- > h <- Open fp (AppendMode _)
   -- > Close h
   -- > Open fp (AppendMode MustBeNew)
   | TagExclusiveFail
+
+
+  -- Open with MustExist, but the file does not exist.
+  --
+  -- > DoesFileExist fp
+  -- > h <- Open fp (AppendMode _)
+  | TagAssumeExists
 
 
   -- Reading returns an empty bytestring when EOF
@@ -1136,6 +1144,7 @@ tag = C.classify [
     , tagPutSeekGet Set.empty Set.empty
     , tagPutSeekNegGet Set.empty Set.empty
     , tagExclusiveFail
+--    , tagAssumeExistsFail -- Set.empty
     , tagReadEOF
     , tagPread
     , tagPutGetBuf Set.empty
@@ -1480,6 +1489,23 @@ tag = C.classify [
           , fsErrorType fsError == FsResourceAlreadyExist ->
             Left TagExclusiveFail
         _otherwise -> Right tagExclusiveFail
+
+    tagAssumeExistsFail :: EventPred
+    tagAssumeExistsFail = C.predicate $ \ev ->
+{-      
+    tagClosedTwice closed = successful $ \ev _suc ->
+      case eventMockCmd ev of
+        Close (Handle h _) | Set.member h closed -> Left TagClosedTwice
+        Close (Handle h _) -> Right $ tagClosedTwice $ Set.insert h closed
+        _otherwise -> Right $ tagClosedTwice closed
+        (DoesFileExist _, Bool False) -> Left TagDoesFileExistKO
+-}
+      case (eventMockCmd ev, eventMockResp ev) of
+        (Open _ mode, Resp (Left fsError))
+          | MustExist <- allowExisting mode
+          , fsErrorType fsError == FsResourceDoesNotExist ->
+            Left TagAssumeExists
+        _otherwise -> Right tagAssumeExistsFail
 
     tagReadEOF :: EventPred
     tagReadEOF = successful $ \ev suc ->
