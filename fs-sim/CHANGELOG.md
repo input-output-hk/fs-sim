@@ -8,6 +8,26 @@
   exception is thrown during execution of the function. Though we fixed the bug,
   it is also a breaking change: the type signature now has an additional
   constraint.
+* Change finiteness guarantees for `Stream`s. Where streams could previously be
+  *definitely* finite or *possibly* infinite, they should now be *definitely*
+  finite or *definitely* infinite. This is mostly a conceptual change: it was
+  already guaranteed by most if not all of the `Stream` functions. Still, the
+  conceptual change should make the use of `Streams` more ergonomic going
+  forward.
+
+  As a result of and in addition to the conceptual change, the `Stream`
+  interface got an overhaul. The concrete changes are:
+
+  * The internals of the `Stream` are now exposed, but with big warnings about
+    unsafe usage related to finiteness.
+  * Added new `runStreamN` and `runStreamIndefinitely` functions.
+  * Renamed `mkInfinite` to `unsafeMkInfinite`.
+  * Added new `isFinite` and `isInfinite` queries.
+  * Added a new `genFiniteN` function.
+  * Removed `genMaybe'`, as it was just a specific instantiation of `genMaybe`
+    that has no clear benefit being its own top-level function.
+  * Added a new `liftShrinkStream` function.
+  * Updated documentation.
 
 ## 0.3.1.0 -- 2024-12-10
 
