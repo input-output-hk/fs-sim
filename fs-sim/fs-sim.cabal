@@ -63,6 +63,7 @@ test-suite fs-sim-test
   other-modules:
     Test.System.FS.Sim.Error
     Test.System.FS.Sim.FsTree
+    Test.System.FS.Sim.Stream
     Test.System.FS.StateMachine
     Test.Util
     Test.Util.RefEnv
@@ -74,6 +75,7 @@ test-suite fs-sim-test
     , bifunctors
     , bytestring
     , containers
+    , deepseq
     , fs-api
     , fs-sim
     , generics-sop
