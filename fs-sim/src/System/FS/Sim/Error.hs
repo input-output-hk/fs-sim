@@ -433,8 +433,10 @@ genErrors genPartialWrites genSubstituteWithJunk = do
     hPutBufSomeAtE <- commonPutErrors
     return Errors {..}
   where
-    streamGen l = Stream.genInfinite . Stream.genMaybe' l . QC.elements
-    streamGen' l = Stream.genInfinite . Stream.genMaybe' l . QC.frequency
+    genMaybe' = Stream.genMaybe 2
+
+    streamGen l = Stream.genInfinite . genMaybe' l . QC.elements
+    streamGen' l = Stream.genInfinite . genMaybe' l . QC.frequency
 
     commonGetErrors = streamGen' 20
       [ (1, return $ Left FsReachedEOF)
