@@ -572,15 +572,12 @@ runSimErrorFS mockFS errors action = do
 
 -- | Execute the next action using the given 'Errors'. After the action is
 -- finished, the previous 'Errors' are restored.
-withErrors :: MonadSTM m => StrictTVar m Errors -> Errors -> m a -> m a
-withErrors errorsVar tempErrors action = do
-    originalErrors <- atomically $ do
-      originalErrors <- readTVar errorsVar
-      writeTVar errorsVar tempErrors
-      return originalErrors
-    res <- action
-    atomically $ writeTVar errorsVar originalErrors
-    return res
+withErrors :: (MonadSTM m, MonadThrow m) => StrictTVar m Errors -> Errors -> m a -> m a
+withErrors errorsVar tempErrors action =
+    bracket
+      (atomically $ swapTVar errorsVar tempErrors)
+      (\originalErrors -> atomically $ swapTVar errorsVar originalErrors)
+      $ \_ -> action
 
 {-------------------------------------------------------------------------------
   Utilities

@@ -1,5 +1,14 @@
 # Revision history for fs-sim
 
+## ?.?.?.? -- ????-??-??
+
+### Breaking
+
+* Fix a bug where `withErrors` would not put back the previous `Errors` when an
+  exception is thrown during execution of the function. Though we fixed the bug,
+  it is also a breaking change: the type signature now has an additional
+  constraint.
+
 ## 0.3.1.0 -- 2024-12-10
 
 ### Non-breaking
