@@ -1,5 +1,13 @@
 # Revision history for fs-api
 
+## ?.?.?.? -- ????-??-??
+
+### Non-breaking
+
+* Make the orphan `Condense` instance for `System.IO.SeekMode` into a non-orphan
+  instance. The instance is still exported from the same modules it was exported
+  from previously, `System.FS.API.Types` in particular.
+
 ## 0.3.0.1 -- 2024-10-02
 
 ### Patch

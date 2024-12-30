@@ -23,6 +23,7 @@ import           Data.Text (Text, unpack)
 import           Data.Void
 import           Data.Word
 import           Numeric.Natural
+import           System.IO (SeekMode (..))
 import           Text.Printf (printf)
 
 {-------------------------------------------------------------------------------
@@ -111,3 +112,8 @@ instance Condense BS.Strict.ByteString where
 
 instance Condense BS.Lazy.ByteString where
   condense bs = show bs ++ "<" ++ show (BS.Lazy.length bs) ++ "b>"
+
+instance Condense SeekMode where
+  condense RelativeSeek = "r"
+  condense AbsoluteSeek = "a"
+  condense SeekFromEnd  = "e"

@@ -5,8 +5,6 @@
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 
--- For Show Errno and Condense SeekMode instances
-{-# OPTIONS_GHC -Wno-orphans #-}
 module System.FS.API.Types (
     -- * Modes
     AllowExisting (..)
@@ -451,11 +449,6 @@ ioToFsErrorType ioErr = case Errno <$> GHC.ioe_errno ioErr of
 {-------------------------------------------------------------------------------
   Condense instances
 -------------------------------------------------------------------------------}
-
-instance Condense SeekMode where
-  condense RelativeSeek = "r"
-  condense AbsoluteSeek = "a"
-  condense SeekFromEnd  = "e"
 
 instance Condense AllowExisting where
   condense AllowExisting = ""
