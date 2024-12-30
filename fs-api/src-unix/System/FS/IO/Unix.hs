@@ -73,19 +73,16 @@ open fp openMode = Posix.openFd fp posixOpenMode fileFlags
       AppendMode    ex -> ( Posix.WriteOnly
                           , defaultFileFlags { Posix.append = True
                                              , Posix.exclusive = isExcl ex
-                                             , Posix.creat = Just Posix.stdFileMode }
+                                             , Posix.creat = creat ex }
                           )
       ReadWriteMode ex -> ( Posix.ReadWrite
                           , defaultFileFlags { Posix.exclusive = isExcl ex
-                                             , Posix.creat = Just Posix.stdFileMode }
+                                             , Posix.creat = creat ex }
                           )
       WriteMode     ex -> ( Posix.ReadWrite
                           , defaultFileFlags { Posix.exclusive = isExcl ex
-                                             , Posix.creat = Just Posix.stdFileMode }
+                                             , Posix.creat = creat ex }
                           )
-
-    isExcl AllowExisting = False
-    isExcl MustBeNew     = True
 # else
 open fp openMode = Posix.openFd fp posixOpenMode fileMode fileFlags
   where
@@ -95,22 +92,26 @@ open fp openMode = Posix.openFd fp posixOpenMode fileMode fileFlags
                           , defaultFileFlags
                           )
       AppendMode    ex -> ( Posix.WriteOnly
-                          , Just Posix.stdFileMode
+                          , creat x
                           , defaultFileFlags { Posix.append = True
                                              , Posix.exclusive = isExcl ex }
                           )
       ReadWriteMode ex -> ( Posix.ReadWrite
-                          , Just Posix.stdFileMode
+                          , creat x
                           , defaultFileFlags { Posix.exclusive = isExcl ex }
                           )
       WriteMode     ex -> ( Posix.ReadWrite
-                          , Just Posix.stdFileMode
+                          , creat x
                           , defaultFileFlags { Posix.exclusive = isExcl ex }
                           )
-
+# endif
     isExcl AllowExisting = False
     isExcl MustBeNew     = True
-# endif
+    isExcl MustExist     = False
+
+    creat AllowExisting = Just Posix.stdFileMode
+    creat MustBeNew     = Just Posix.stdFileMode
+    creat MustExist     = Nothing
 
 -- | Writes the data pointed by the input 'Ptr Word8' into the input 'FHandle'.
 write :: FHandle -> Ptr Word8 -> Int64 -> IO Word32
