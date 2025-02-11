@@ -8,6 +8,10 @@
   instance. The instance is still exported from the same modules it was exported
   from previously, `System.FS.API.Types` in particular.
 
+### Patch
+
+* Make it build with `ghc-9.12`.
+
 ## 0.3.0.1 -- 2024-10-02
 
 ### Patch

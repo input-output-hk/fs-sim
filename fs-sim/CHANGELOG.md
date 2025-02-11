@@ -29,6 +29,10 @@
   * Added a new `liftShrinkStream` function.
   * Updated documentation.
 
+### Patch
+
+* Make it build with `ghc-9.12`.
+
 ## 0.3.1.0 -- 2024-12-10
 
 ### Non-breaking
