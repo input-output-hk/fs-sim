@@ -1004,92 +1004,94 @@ data Tag =
   -- > Get ..
   | TagPutTruncateGet
 
-  -- Close a handle 2 times
+  -- | Close a handle 2 times
   --
   -- > h <- Open ..
   -- > close h
   -- > close h
   | TagClosedTwice
 
-  -- Open an existing file with ReadMode and then with WriteMode
+  -- | Open an existing file with ReadMode and then with WriteMode
   --
   -- > open fp ReadMode
   -- > open fp Write
   | TagOpenReadThenWrite
 
-  -- Open 2 Readers of a file.
+  -- | Open 2 Readers of a file.
   --
   -- > open fp ReadMode
   -- > open fp ReadMode
   | TagOpenReadThenRead
 
-  -- ListDir on a non empty dirextory.
+  -- | ListDir on a non empty dirextory.
   --
   -- > CreateDirIfMissing True a/b
   -- > ListDirectory a
   | TagCreateDirWithParentsThenListDirNotNull
 
-  -- Read from an AppendMode file
+  -- | Read from an AppendMode file
   --
   -- > h <- Open fp AppendMode
   -- > Read h ..
   | TagReadInvalid
 
-  -- Write to a read only file
+  -- | Write to a read only file
   --
   -- > h <- Open fp ReadMode
   -- > Put h ..
   | TagWriteInvalid
 
-  -- Put Seek and Get
+  -- | Put Seek and Get
   --
   -- > Put ..
   -- > Seek ..
   -- > Get ..
   | TagPutSeekGet
 
-  -- Put Seek (negative) and Get
+  -- | Put Seek (negative) and Get
   --
   -- > Put ..
   -- > Seek .. (negative)
   -- > Get ..
   | TagPutSeekNegGet
 
-
-  -- Open with MustBeNew (O_EXCL flag), but the file already existed.
+  -- | Open with MustBeNew (O_EXCL flag), but the file already existed.
   --
   -- > h <- Open fp (AppendMode _)
   -- > Close h
   -- > Open fp (AppendMode MustBeNew)
   | TagExclusiveFail
 
-
-  -- Open with MustExist, but the file does not exist.
+  -- | Open with MustExist, but the file does not exist.
   --
   -- > DoesFileExist fp
   -- > h <- Open fp (AppendMode _)
   | TagAssumeExists
 
+  -- | Open in ReadMode, but the file does not exist.
+  --
+  -- > DoesFileExist fp
+  -- > h <- Open fp ReadMode
+  | TagReadMustExist
 
-  -- Reading returns an empty bytestring when EOF
+  -- | Reading returns an empty bytestring when EOF
   --
   -- > h <- open fp ReadMode
   -- > Get h 1 == ""
   | TagReadEOF
 
-
-  -- GetAt
+  -- | GetAt
   --
   -- > GetAt ...
   | TagPread
 
-  -- Roundtrip for I/O with user-supplied buffers
+  -- | Roundtrip for I/O with user-supplied buffers
   --
   -- > PutBuf h bs c
   -- > GetBuf h c          (==bs)
   | TagPutGetBuf
 
-  -- Roundtrip for I/O with user-supplied buffers
+  -- | Roundtrip for I/O with user-supplied buffers
   --
   -- > PutBufAt h bs c o
   -- > GetBufAt h c o      (==bs)
@@ -1144,7 +1146,8 @@ tag = C.classify [
     , tagPutSeekGet Set.empty Set.empty
     , tagPutSeekNegGet Set.empty Set.empty
     , tagExclusiveFail
---    , tagAssumeExistsFail -- Set.empty
+    , tagAssumeExistsFail
+    , tagReadMustExistFail
     , tagReadEOF
     , tagPread
     , tagPutGetBuf Set.empty
@@ -1492,20 +1495,20 @@ tag = C.classify [
 
     tagAssumeExistsFail :: EventPred
     tagAssumeExistsFail = C.predicate $ \ev ->
-{-      
-    tagClosedTwice closed = successful $ \ev _suc ->
-      case eventMockCmd ev of
-        Close (Handle h _) | Set.member h closed -> Left TagClosedTwice
-        Close (Handle h _) -> Right $ tagClosedTwice $ Set.insert h closed
-        _otherwise -> Right $ tagClosedTwice closed
-        (DoesFileExist _, Bool False) -> Left TagDoesFileExistKO
--}
       case (eventMockCmd ev, eventMockResp ev) of
         (Open _ mode, Resp (Left fsError))
           | MustExist <- allowExisting mode
           , fsErrorType fsError == FsResourceDoesNotExist ->
             Left TagAssumeExists
         _otherwise -> Right tagAssumeExistsFail
+
+    tagReadMustExistFail :: EventPred
+    tagReadMustExistFail = C.predicate $ \ev ->
+      case (eventMockCmd ev, eventMockResp ev) of
+        (Open _ ReadMode, Resp (Left fsError))
+          | fsErrorType fsError == FsResourceDoesNotExist ->
+            Left TagReadMustExist
+        _otherwise -> Right tagReadMustExistFail
 
     tagReadEOF :: EventPred
     tagReadEOF = successful $ \ev suc ->

@@ -70,6 +70,15 @@ import           System.FS.Condense
 -------------------------------------------------------------------------------}
 
 -- | How to 'System.FS.API.hOpen' a new file.
+--
+-- Each mode of file operation has an associated 'AllowExisting' parameter which
+-- specifies the semantics of how to handle the existence or non-existence of
+-- the file.
+--
+-- /Notably however/, opening a file in read mode with the @ReadMode@ value
+-- /implicitly/ has the associated 'AllowExisting' value of 'MustExist'.
+-- This is beacause opening a non-existing file in 'ReadMode' provides access to
+-- exactly 0 bytes of data and is hence a useless operation.
 data OpenMode
   = ReadMode
   | WriteMode     AllowExisting
@@ -88,11 +97,14 @@ data AllowExisting
   | MustExist
     -- ^ The file must already exist. If it does not, an error
     -- ('FsResourceDoesNotExist') is thrown.
+    --
+    -- /Note:/ If opening a file in 'ReadMode', then the file must exist
+    -- or an exception is thrown.
   deriving (Eq, Show)
 
 allowExisting :: OpenMode -> AllowExisting
 allowExisting openMode = case openMode of
-  ReadMode         -> AllowExisting
+  ReadMode         -> MustExist
   WriteMode     ex -> ex
   AppendMode    ex -> ex
   ReadWriteMode ex -> ex

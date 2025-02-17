@@ -231,18 +231,23 @@ getDir fp =
   Specific file system functions
 -------------------------------------------------------------------------------}
 
--- | Open a file based on an 'AllowExisting'.
+-- | Open a file: create it if necessary or throw an error if either:
+--    1. It existed already while we were supposed to create it from scratch
+--        (when passed 'MustBeNew').
+--    2. It did not already exists when we expected to (when passed 'MustExist').
 openFile :: Monoid a
          => FsPath -> AllowExisting -> FsTree a -> Either FsTreeError (FsTree a)
 openFile fp ex = alterFile fp Left caseDoesNotExist caseAlreadyExist
   where
     caseAlreadyExist a = case ex of
+      AllowExisting -> Right a
       MustBeNew -> Left (FsExists fp)
-      _         -> Right a
+      MustExist -> Right a
 
     caseDoesNotExist = case ex of
+      AllowExisting -> Right mempty
+      MustBeNew -> Right mempty
       MustExist -> Left (FsMissing fp (pathLast fp :| []))
-      _         -> Right mempty
 
 -- | Replace the contents of the specified file (which must exist)
 replace :: FsPath -> a -> FsTree a -> Either FsTreeError (FsTree a)

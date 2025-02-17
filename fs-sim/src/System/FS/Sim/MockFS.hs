@@ -65,7 +65,7 @@ module System.FS.Sim.MockFS (
   , hPutBufSomeAt
   ) where
 
-import           Control.Monad (forM, forM_, unless, void, when)
+import           Control.Monad (forM, forM_, unless, when)
 import           Control.Monad.Except (MonadError, throwError)
 import           Control.Monad.Primitive (PrimMonad (..))
 import           Control.Monad.State.Strict (MonadState, get, gets, put)
@@ -479,11 +479,7 @@ hOpen fp openMode = do
       , fsLimitation  = True
       }
     modifyMockFS $ \fs -> do
-      let assumedExistance (WriteMode MustExist) = True
-          assumedExistance (AppendMode MustExist) = True
-          assumedExistance (ReadWriteMode MustExist) = True
-          assumedExistance _ = False
-          alreadyHasWriter =
+      let alreadyHasWriter =
             any (\hs -> openFilePath hs == fp && isWriteHandle hs) $
             openHandles fs
       when (openMode /= ReadMode && alreadyHasWriter) $
@@ -495,8 +491,6 @@ hOpen fp openMode = do
           , fsErrorStack  = prettyCallStack
           , fsLimitation  = True
           }
-      when (openMode == ReadMode || assumedExistance openMode) $ void $
-        checkFsTree $ FS.getFile fp (mockFiles fs)
       files' <- checkFsTree $ FS.openFile fp ex (mockFiles fs)
       return $ newHandle (fs { mockFiles = files' })
                          (OpenHandle fp (filePtr openMode))
