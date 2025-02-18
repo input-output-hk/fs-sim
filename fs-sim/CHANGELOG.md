@@ -32,6 +32,8 @@
 ### Patch
 
 * Make it build with `ghc-9.12`.
+* Support the new `MustExist` option for `AllowExisting` that was added in
+  `fs-api`.
 
 ## 0.3.1.0 -- 2024-12-10
 

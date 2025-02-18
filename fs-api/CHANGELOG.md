@@ -2,6 +2,10 @@
 
 ## ?.?.?.? -- ????-??-??
 
+### Breaking
+
+* Add a new `MustExist` option to `AllowExisting`.
+
 ### Non-breaking
 
 * Make the orphan `Condense` instance for `System.IO.SeekMode` into a non-orphan
@@ -11,6 +15,10 @@
 ### Patch
 
 * Make it build with `ghc-9.12`.
+* Bugfix: opening a file in read mode now expects the file to exist already.
+  This was already the semantics when using `hOpen` from the `ioHasFS` instance,
+  but it was not reflected in the `allowExisting` function. `allowExisting
+  Readmode` now returns `MustExist` instead of `AllowExisting`.
 
 ## 0.3.0.1 -- 2024-10-02
 
