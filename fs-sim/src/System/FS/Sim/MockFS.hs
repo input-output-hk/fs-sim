@@ -65,7 +65,7 @@ module System.FS.Sim.MockFS (
   , hPutBufSomeAt
   ) where
 
-import           Control.Monad (forM, forM_, unless, void, when)
+import           Control.Monad (forM, forM_, unless, when)
 import           Control.Monad.Except (MonadError, throwError)
 import           Control.Monad.Primitive (PrimMonad (..))
 import           Control.Monad.State.Strict (MonadState, get, gets, put)
@@ -491,8 +491,6 @@ hOpen fp openMode = do
           , fsErrorStack  = prettyCallStack
           , fsLimitation  = True
           }
-      when (openMode == ReadMode) $ void $
-        checkFsTree $ FS.getFile fp (mockFiles fs)
       files' <- checkFsTree $ FS.openFile fp ex (mockFiles fs)
       return $ newHandle (fs { mockFiles = files' })
                          (OpenHandle fp (filePtr openMode))
