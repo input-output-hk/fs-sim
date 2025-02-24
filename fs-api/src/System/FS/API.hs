@@ -263,7 +263,7 @@ hGetBufExactly hfs h buf bufOff c = go c bufOff
     go !remainingCount !currentBufOff
       | remainingCount == 0 = pure c
       | otherwise            = do
-          readBytes <- hGetBufSome hfs h buf currentBufOff c
+          readBytes <- hGetBufSome hfs h buf currentBufOff remainingCount
           if readBytes == 0 then
             throwIO FsError {
                 fsErrorType   = FsReachedEOF
@@ -294,7 +294,7 @@ hGetBufExactlyAt hfs h buf bufOff c off = go c off bufOff
     go !remainingCount !currentOffset !currentBufOff
       | remainingCount == 0 = pure c
       | otherwise            = do
-          readBytes <- hGetBufSomeAt hfs h buf currentBufOff c currentOffset
+          readBytes <- hGetBufSomeAt hfs h buf currentBufOff remainingCount currentOffset
           if readBytes == 0 then
             throwIO FsError {
                 fsErrorType   = FsReachedEOF

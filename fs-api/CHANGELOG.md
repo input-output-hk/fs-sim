@@ -19,6 +19,9 @@
   This was already the semantics when using `hOpen` from the `ioHasFS` instance,
   but it was not reflected in the `allowExisting` function. `allowExisting
   Readmode` now returns `MustExist` instead of `AllowExisting`.
+* Bugfix: `hGetBufExactly` and `hGetBufExactlyAt` would previously try to read
+  too many bytes in the presence of partial reads. These functions now properly
+  count the number of remaining bytes that have to be read.
 
 ## 0.3.0.1 -- 2024-10-02
 
