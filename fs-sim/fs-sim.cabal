@@ -39,18 +39,18 @@ library
 
   default-language: Haskell2010
   build-depends:
-    , base                   >=4.14  && <4.22
-    , base16-bytestring      ^>=0.1  || ^>=1.0
-    , bytestring             ^>=0.10 || ^>=0.11 || ^>=0.12
-    , containers             ^>=0.5  || ^>=0.6  || ^>=0.7
-    , fs-api                 ^>=0.3
-    , io-classes             ^>=1.6  || ^>=1.7
-    , io-classes:strict-stm
-    , mtl                    ^>=2.2  || ^>=2.3
-    , primitive              ^>=0.9
-    , QuickCheck             ^>=2.13 || ^>=2.14 || ^>=2.15
-    , safe-wild-cards        ^>=1.0
-    , text                   ^>=1.2  || ^>=2.0  || ^>=2.1
+    , base               >=4.14  && <4.22
+    , base16-bytestring  ^>=0.1  || ^>=1.0
+    , bytestring         ^>=0.10 || ^>=0.11 || ^>=0.12
+    , containers         ^>=0.5  || ^>=0.6  || ^>=0.7
+    , fs-api             ^>=0.3
+    , io-classes         ^>=1.5
+    , mtl                ^>=2.2  || ^>=2.3
+    , primitive          ^>=0.9
+    , QuickCheck         ^>=2.13 || ^>=2.14 || ^>=2.15
+    , safe-wild-cards    ^>=1.0
+    , strict-stm         ^>=1.5
+    , text               ^>=1.2  || ^>=2.0  || ^>=2.1
 
   ghc-options:
     -Wall -Wcompat -Wincomplete-uni-patterns
@@ -80,12 +80,12 @@ test-suite fs-sim-test
     , fs-api
     , fs-sim
     , generics-sop
-    , io-classes:strict-stm
     , pretty-show
     , primitive
     , QuickCheck
     , quickcheck-state-machine  >=0.10
     , random
+    , strict-stm
     , tasty
     , tasty-hunit
     , tasty-quickcheck
