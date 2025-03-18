@@ -2,6 +2,8 @@
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
+{- HLINT ignore "Use >=>" #-}
+
 -- | 'HasFS' instance using 'MockFS' stored in an STM variable
 module System.FS.Sim.STM (
     runSimFS
@@ -26,7 +28,7 @@ import           System.FS.Sim.Prim
 --- | Runs a computation provided an initial 'MockFS', producing a
 --- result, the final state of the filesystem and a sequence of actions occurred
 --- in the filesystem.
-runSimFS :: (MonadSTM m, MonadThrow m, PrimMonad m)
+runSimFS :: (MonadSTM m, MonadCatch m, PrimMonad m)
          => MockFS
          -> (HasFS m HandleMock -> m a)
          -> m (a, MockFS)
@@ -37,13 +39,13 @@ runSimFS fs act = do
     return (a, fs')
 
 -- | Alternative to 'simHasFS' that creates 'TVar's internally.
-simHasFS' :: (MonadSTM m, MonadThrow m, PrimMonad m)
+simHasFS' :: (MonadSTM m, MonadCatch m, PrimMonad m)
           => MockFS
           -> m (HasFS m HandleMock)
 simHasFS' mockFS = simHasFS <$> newTMVarIO mockFS
 
 -- | Equip @m@ with a @HasFs@ instance using the mock file system
-simHasFS :: forall m. (MonadSTM m, MonadThrow m, PrimMonad m)
+simHasFS :: forall m. (MonadSTM m, MonadCatch m, PrimMonad m)
          => StrictTMVar m MockFS
          -> HasFS m HandleMock
 simHasFS var = HasFS {
@@ -75,15 +77,12 @@ simHasFS var = HasFS {
     }
   where
     sim :: FSSimT m a -> m a
-    sim m = do
-      st <- atomically $ takeTMVar var
-      runFSSimT m st >>= \case
-        Left e -> do
-          atomically $ putTMVar var st
-          throwIO e
-        Right (a, st') -> do
-          atomically $ putTMVar var st'
-          pure a
+    sim m = modifyTMVarIO var $ \st ->
+        runFSSimT m st >>= \case
+          Left e -> do
+            throwIO e
+          Right (a, st') -> do
+            pure (a, st')
 
     (.:) :: (y -> z) -> (x0 -> x1 -> y) -> (x0 -> x1 -> z)
     (f .: g) x0 x1 = f (g x0 x1)
@@ -96,3 +95,21 @@ simHasFS var = HasFS {
 
     (....:) :: (y -> z) -> (x0 -> x1 -> x2 -> x3 -> x4 -> y) -> (x0 -> x1 -> x2 -> x3 -> x4 -> z)
     (f ....: g) x0 x1 x2 x3 x4 = f (g x0 x1 x2 x3 x4)
+
+modifyTMVarIO ::
+     (MonadSTM m, MonadCatch m)
+  => StrictTMVar m a -> (a -> m (b, a)) -> m b
+modifyTMVarIO var k =
+    fst . fst <$> generalBracket
+      (atomically $ takeTMVar var)
+      (\old -> \case
+          ExitCaseSuccess (_, new)
+            -> atomically $ putTMVar var new
+          ExitCaseException _
+            -> atomically $ putTMVar var old
+          ExitCaseAbort
+            -> atomically $ putTMVar var old
+      )
+      k
+
+-- TODO: regression test
