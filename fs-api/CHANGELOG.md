@@ -23,6 +23,7 @@
 * Bugfix: `hGetBufExactly` and `hGetBufExactlyAt` would previously try to read
   too many bytes in the presence of partial reads. These functions now properly
   count the number of remaining bytes that have to be read.
+* Support `io-classes-1.8`
 
 ## 0.3.0.1 -- 2024-10-02
 
