@@ -19,8 +19,7 @@ extra-doc-files:
   CHANGELOG.md
   README.md
 
-tested-with:
-  GHC ==8.10 || ==9.2 || ==9.4 || ==9.6 || ==9.8 || ==9.10 || ==9.12
+tested-with:     GHC ==9.4 || ==9.6 || ==9.8 || ==9.10 || ==9.12
 
 source-repository head
   type:     git

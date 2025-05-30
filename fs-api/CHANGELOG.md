@@ -15,6 +15,7 @@
 ### Patch
 
 * Make it build with `ghc-9.12`.
+* Drop support for `ghc-8.10` and `ghc-9.2`.
 * Bugfix: opening a file in read mode now expects the file to exist already.
   This was already the semantics when using `hOpen` from the `ioHasFS` instance,
   but it was not reflected in the `allowExisting` function. `allowExisting
