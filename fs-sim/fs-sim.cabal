@@ -1,6 +1,6 @@
 cabal-version:   3.0
 name:            fs-sim
-version:         0.3.1.0
+version:         0.4.0.0
 synopsis:        Simulated file systems
 description:     Simulated file systems.
 license:         Apache-2.0
@@ -26,6 +26,12 @@ source-repository head
   location: https://github.com/input-output-hk/fs-sim
   subdir:   fs-sim
 
+source-repository this
+  type:     git
+  location: https://github.com/input-output-hk/fs-sim
+  subdir:   fs-sim
+  tag:      fs-sim-0.4.0.0
+
 library
   hs-source-dirs:   src
   exposed-modules:
@@ -42,7 +48,7 @@ library
     , base16-bytestring      ^>=0.1  || ^>=1.0
     , bytestring             ^>=0.10 || ^>=0.11 || ^>=0.12
     , containers             ^>=0.5  || ^>=0.6  || ^>=0.7
-    , fs-api                 ^>=0.3
+    , fs-api                 ^>=0.4
     , io-classes             ^>=1.6  || ^>=1.7  || ^>=1.8.0.1
     , io-classes:strict-stm
     , mtl                    ^>=2.2  || ^>=2.3
