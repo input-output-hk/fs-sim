@@ -32,6 +32,8 @@
 ### Patch
 
 * Make it build with `ghc-9.12`.
+* Support `io-classes-1.8`.
+* Drop support for `ghc-8.10` and `ghc-9.2`.
 * Support the new `MustExist` option for `AllowExisting` that was added in
   `fs-api`.
 

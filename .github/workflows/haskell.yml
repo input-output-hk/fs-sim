@@ -22,12 +22,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["8.10.7", "9.2.8", "9.4.8", "9.6.6", "9.8.4", "9.10.1", "9.12.1"]
+        ghc: ["9.4.8", "9.6.7", "9.8.4", "9.10.2", "9.12.2"]
         cabal: ["3.14.1.1"]
-        os: [ubuntu-latest, windows-latest, macOS-13]
+        os: [ubuntu-latest, windows-latest, macOS-latest]
         no-debug: [""]
         include:
-          - ghc: "9.6.6"
+          - ghc: "9.6.7"
             cabal: "3.12.1.0"
             os: ubuntu-latest
             no-debug: "no-debug"
@@ -116,7 +116,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.6.6"]
+        ghc: ["9.6.7"]
         cabal: ["3.12.1.0"]
         os: [ubuntu-latest]
 
@@ -128,7 +128,7 @@ jobs:
     # an argument to cabal install. This ensures that we never rebuild
     # dependencies because of newly uploaded packages unless we want to.
     env:
-      hackage-index-state: "2024-04-10T14:36:07Z"
+      hackage-index-state: "2025-05-26T13:28:18Z"
 
     steps:
     - name: Checkout repository
@@ -183,14 +183,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.6.6"]
+        ghc: ["9.6.7"]
         cabal: ["3.12.1.0"]
         os: [ubuntu-latest]
 
     # See the comment on the hackage-index-state environment variable for the
     # stylish-haskell job.
     env:
-      hackage-index-state: "2024-04-10T14:36:07Z"
+      hackage-index-state: "2025-05-26T13:28:18Z"
 
     steps:
     - name: Checkout repository
@@ -245,7 +245,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.6.6"]
+        ghc: ["9.6.7"]
         cabal: ["3.10.3.0"]
         os: [ubuntu-latest]
 
