@@ -2,6 +2,8 @@
 
 ## ?.?.?.? -- ????-??-??
 
+## 0.4.0.0 -- 2025-05-30
+
 ### Breaking
 
 * Fix a bug where `withErrors` would not put back the previous `Errors` when an
@@ -32,8 +34,8 @@
 ### Patch
 
 * Make it build with `ghc-9.12`.
-* Support `io-classes-1.8`.
-* Drop support for `ghc-8.10` and `ghc-9.2`.
+* Drop support for `ghc-8.10`.
+* Support `io-classes-1.8.0.1`.
 * Support the new `MustExist` option for `AllowExisting` that was added in
   `fs-api`.
 
