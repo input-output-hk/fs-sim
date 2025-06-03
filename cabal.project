@@ -1,6 +1,6 @@
 index-state:
   -- Bump this if you need newer packages from Hackage
-  , hackage.haskell.org 2025-05-26T13:28:18Z
+  , hackage.haskell.org 2025-06-03T08:53:00Z
 
 packages:
   fs-api
