@@ -62,7 +62,7 @@ library
   if os(windows)
     hs-source-dirs:  src-win32
     exposed-modules: System.FS.IO.Windows
-    build-depends:   Win32 >=2.6.1.0
+    build-depends:   Win32 ^>=2.14
 
   -- every other distribution is handled like it is Unix-based
   else
