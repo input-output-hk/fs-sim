@@ -1,6 +1,6 @@
 index-state:
   -- Bump this if you need newer packages from Hackage
-  , hackage.haskell.org 2025-06-03T08:53:00Z
+  , hackage.haskell.org 2025-07-17T14:32:30Z
 
 packages:
   fs-api
@@ -12,6 +12,3 @@ benchmarks: True
 
 -- comment me if you are benchmarking
 import: cabal.project.debug
-
--- TODO: remove once a new version of unix-bytestring is released
-allow-newer: unix-bytestring:base
