@@ -1,6 +1,10 @@
 # Revision history for fs-sim
 
-## ?.?.?.? -- ????-??-??
+## 0.4.1.0 -- 2025-09-29
+
+### Non-breaking
+
+* Reimplement `partialiseWord64` to allow for 32 bits architectures such as WASM.
 
 ## 0.4.0.0 -- 2025-05-30
 
