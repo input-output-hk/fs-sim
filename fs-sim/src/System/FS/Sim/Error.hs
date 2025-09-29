@@ -47,7 +47,6 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy.Char8 as LC8
-import           Data.Coerce (coerce)
 import           Data.Foldable (for_)
 import           Data.List (intercalate)
 import qualified Data.List as List
@@ -55,7 +54,6 @@ import           Data.Maybe (catMaybes)
 import           Data.Primitive.ByteArray
 import           Data.String (IsString (..))
 import           Data.Word (Word64)
-import           Foreign.C.Types
 import           Prelude hiding (null)
 import           SafeWildCards
 import           System.Posix.Types
@@ -130,7 +128,10 @@ partialiseByteCount (Partial p) c
 
 -- | Like 'partialiseByteCount', but for 'Word64'.
 partialiseWord64 :: Partial -> Word64 -> Word64
-partialiseWord64 = coerce partialiseByteCount
+partialiseWord64 (Partial p) c
+  | 0 <- c   = c
+  | p >= c   = 1
+  | otherwise = c - p
 
 -- | Given a bytestring that is requested to be written to disk, use
 -- 'partialiseByteCount' to compute a partial bytestring.
