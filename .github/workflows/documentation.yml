@@ -114,7 +114,7 @@ jobs:
           tar vzxf haddocks.tgz
 
       - name: Upload haddocks artifact to pages
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: ./docs/haddocks
 
