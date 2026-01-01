@@ -71,7 +71,7 @@ jobs:
         tar vzcf haddocks.tgz ./docs/haddocks
 
     - name: Upload haddocks as an artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: haddocks
         path: haddocks.tgz
