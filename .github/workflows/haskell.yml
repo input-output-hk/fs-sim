@@ -63,7 +63,7 @@ jobs:
         cabal build all --dry-run
 
     - name: "Restore cache"
-      uses: actions/cache/restore@v4
+      uses: actions/cache/restore@v5
       id: restore-cabal-cache
       env:
         cache-name: cache-cabal-build
@@ -80,7 +80,7 @@ jobs:
       run: cabal build --only-dependencies all
 
     - name: "Save cache"
-      uses: actions/cache/save@v4
+      uses: actions/cache/save@v5
       id: save-cabal-cache
       # Note: cache-hit will be set to true only when cache hit occurs for the
       # exact key match. For a partial key match via restore-keys or a cache
@@ -154,7 +154,7 @@ jobs:
       run: echo "$HOME/.cabal/bin" >> $GITHUB_PATH
 
     - name: Cache cabal store
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       env:
         cache-name: cache-cabal-stylish
       with:
@@ -216,7 +216,7 @@ jobs:
       run: echo "$HOME/.cabal/bin" >> $GITHUB_PATH
 
     - name: Cache cabal store
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       env:
         cache-name: cache-cabal-cabal-fmt
       with:
