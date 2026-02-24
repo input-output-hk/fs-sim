@@ -12,3 +12,9 @@ benchmarks: True
 
 -- comment me if you are benchmarking
 import: cabal.project.debug
+
+if impl(ghc >=9.14)
+  allow-newer:
+    , indexed-traversable:base
+    , safe-wild-cards:template-haskell
+    , unix-bytestring:base
