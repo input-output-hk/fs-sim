@@ -1,16 +1,17 @@
-{-# LANGUAGE DataKinds                  #-}
-{-# LANGUAGE DeriveGeneric              #-}
-{-# LANGUAGE DerivingVia                #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE RecordWildCards            #-}
-{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
-module System.FS.API.Types (
-    -- * Modes
+module System.FS.API.Types
+  ( -- * Modes
     AllowExisting (..)
   , OpenMode (..)
   , SeekMode (..)
   , allowExisting
+
     -- * Paths
   , MountPoint (..)
   , fsFromFilePath
@@ -24,12 +25,16 @@ module System.FS.API.Types (
   , addExtension
   , (</>)
   , combine
+
     -- ** opaque
   , FsPath
+
     -- * Handles
   , Handle (..)
+
     -- * Offset
   , AbsOffset (..)
+
     -- * Errors
   , FsError (..)
   , FsErrorPath (..)
@@ -40,30 +45,30 @@ module System.FS.API.Types (
   , isFsErrorType
   , prettyFsError
   , sameFsError
+
     -- * From 'IOError' to 'FsError'
   , ioToFsError
   , ioToFsErrorType
   ) where
 
-import           Control.DeepSeq (NFData (..), force)
-import           Control.Exception
-import           Data.Function (on)
-import           Data.List (intercalate, stripPrefix)
-import           Data.Maybe (isJust)
+import Control.DeepSeq (NFData (..), force)
+import Control.Exception
+import Data.Function (on)
+import Data.List (intercalate, stripPrefix)
+import Data.Maybe (isJust)
 import qualified Data.Text as Strict
 import qualified Data.Text as Text
-import           Data.Word
-import           Foreign.C.Error (Errno (..))
+import Data.Word
+import Foreign.C.Error (Errno (..))
 import qualified Foreign.C.Error as C
-import           GHC.Generics (Generic)
+import GHC.Generics (Generic)
 import qualified GHC.IO.Exception as GHC
-import           GHC.Show (showCommaSpace)
+import GHC.Show (showCommaSpace)
+import System.FS.CallStack
+import System.FS.Condense
 import qualified System.FilePath as FilePath
-import           System.IO (SeekMode (..))
+import System.IO (SeekMode (..))
 import qualified System.IO.Error as IO
-
-import           System.FS.CallStack
-import           System.FS.Condense
 
 {-------------------------------------------------------------------------------
   Modes
@@ -81,32 +86,32 @@ import           System.FS.Condense
 -- 0 bytes of data and is hence a useless operation.
 data OpenMode
   = ReadMode
-  | WriteMode     AllowExisting
-  | AppendMode    AllowExisting
+  | WriteMode AllowExisting
+  | AppendMode AllowExisting
   | ReadWriteMode AllowExisting
   deriving (Eq, Show)
 
 -- | When opening a file:
 data AllowExisting
-  = AllowExisting
-    -- ^ The file may already exist. If it does, it is reopened. If it
+  = -- | The file may already exist. If it does, it is reopened. If it
     -- doesn't, it is created.
-  | MustBeNew
-    -- ^ The file must not yet exist. If it does, an error
+    AllowExisting
+  | -- | The file must not yet exist. If it does, an error
     -- ('FsResourceAlreadyExist') is thrown.
-  | MustExist
-    -- ^ The file must already exist. If it does not, an error
+    MustBeNew
+  | -- | The file must already exist. If it does not, an error
     -- ('FsResourceDoesNotExist') is thrown.
     --
     -- /Note:/ If opening a file in 'ReadMode', then the file must exist
     -- or an exception is thrown.
+    MustExist
   deriving (Eq, Show)
 
 allowExisting :: OpenMode -> AllowExisting
 allowExisting openMode = case openMode of
-  ReadMode         -> MustExist
-  WriteMode     ex -> ex
-  AppendMode    ex -> ex
+  ReadMode -> MustExist
+  WriteMode ex -> ex
+  AppendMode ex -> ex
   ReadWriteMode ex -> ex
 
 {-------------------------------------------------------------------------------
@@ -134,7 +139,7 @@ allowExisting openMode = case openMode of
 -- \"@..@\" should not be used because @fs-sim@ will not be able to follow these
 -- types of back-links. @fs-sim@ will interpret \"@..@\" as a directory name
 -- instead.
-newtype FsPath = UnsafeFsPath { fsPathToList :: [Strict.Text] }
+newtype FsPath = UnsafeFsPath {fsPathToList :: [Strict.Text]}
   deriving (Eq, Ord, Generic)
   deriving newtype NFData
 
@@ -158,41 +163,43 @@ mkFsPath = fsPathFromList . map Strict.pack
 -- Like @init@ and @last@, 'Nothing' if empty.
 fsPathSplit :: FsPath -> Maybe (FsPath, Strict.Text)
 fsPathSplit fp =
-    case reverse (fsPathToList fp) of
-      []   -> Nothing
-      p:ps -> Just (fsPathFromList (reverse ps), p)
+  case reverse (fsPathToList fp) of
+    [] -> Nothing
+    p : ps -> Just (fsPathFromList (reverse ps), p)
 
 -- | Drop the final component of the path
 --
 -- Undefined if the path is empty.
 fsPathInit :: HasCallStack => FsPath -> FsPath
 fsPathInit fp = case fsPathSplit fp of
-                  Nothing       -> error $ "fsPathInit: empty path"
-                  Just (fp', _) -> fp'
+  Nothing -> error $ "fsPathInit: empty path"
+  Just (fp', _) -> fp'
 
 -- | An alias for '<.>'.
 addExtension :: FsPath -> String -> FsPath
 addExtension = (<.>)
 
 infixr 7 <.>
+
 -- | Add an extension, even if there is already one there.
 --
 -- This works similarly to 'Filepath.<.>'.
 (<.>) :: FsPath -> String -> FsPath
 path <.> [] = path
 path <.> ext = case fsPathSplit path of
-    Nothing          -> mkFsPath [ext']
-    Just (dir, file) -> dir </> UnsafeFsPath [file `Text.append` Text.pack ext']
-  where
-    ext' = case ext of
-      '.':_ -> ext
-      _     -> '.':ext
+  Nothing -> mkFsPath [ext']
+  Just (dir, file) -> dir </> UnsafeFsPath [file `Text.append` Text.pack ext']
+ where
+  ext' = case ext of
+    '.' : _ -> ext
+    _ -> '.' : ext
 
 -- | An alias for '</>'.
 combine :: FsPath -> FsPath -> FsPath
 combine = (</>)
 
 infixr 5 </>
+
 -- | Combine two paths with a path separator.
 --
 -- This works similarly to 'Filepath.</>', but since the arguments are
@@ -204,9 +211,9 @@ infixr 5 </>
 -- combining two empty paths is the empty path
 (</>) :: FsPath -> FsPath -> FsPath
 UnsafeFsPath x </> UnsafeFsPath y = case (x, y) of
-    ([], _) -> UnsafeFsPath y
-    (_, []) -> UnsafeFsPath x
-    _       -> fsPathFromList (x ++ y)
+  ([], _) -> UnsafeFsPath y
+  (_, []) -> UnsafeFsPath x
+  _ -> fsPathFromList (x ++ y)
 
 -- | Mount point
 --
@@ -216,11 +223,12 @@ newtype MountPoint = MountPoint FilePath
 
 fsToFilePath :: MountPoint -> FsPath -> FilePath
 fsToFilePath (MountPoint mp) fp =
-    mp FilePath.</> foldr (FilePath.</>) "" (map Strict.unpack $ fsPathToList fp)
+  mp FilePath.</> foldr (FilePath.</>) "" (map Strict.unpack $ fsPathToList fp)
 
 fsFromFilePath :: MountPoint -> FilePath -> Maybe FsPath
-fsFromFilePath (MountPoint mp) path = mkFsPath <$>
-    stripPrefix (FilePath.splitDirectories mp) (FilePath.splitDirectories path)
+fsFromFilePath (MountPoint mp) path =
+  mkFsPath
+    <$> stripPrefix (FilePath.splitDirectories mp) (FilePath.splitDirectories path)
 
 -- | For better error reporting to the end user, we want to include the
 -- mount point of the file. But the mountpoint may not always be available,
@@ -236,7 +244,7 @@ fsToFsErrorPathUnmounted = FsErrorPath Nothing
 
 instance Show FsErrorPath where
   show (FsErrorPath (Just mp) fp) = fsToFilePath mp fp
-  show (FsErrorPath Nothing   fp) = show fp
+  show (FsErrorPath Nothing fp) = show fp
 
 instance Condense FsErrorPath where
   condense = show
@@ -250,19 +258,18 @@ instance Eq FsErrorPath where
   Handles
 -------------------------------------------------------------------------------}
 
-data Handle h = Handle {
-      -- | The raw underlying handle
-      handleRaw  :: !h
-
-      -- | The path corresponding to this handle
-      --
-      -- This is primarily useful for error reporting.
-    , handlePath :: !FsPath
-    }
-  deriving (Generic)
+data Handle h = Handle
+  { handleRaw :: !h
+  -- ^ The raw underlying handle
+  , handlePath :: !FsPath
+  -- ^ The path corresponding to this handle
+  --
+  -- This is primarily useful for error reporting.
+  }
+  deriving Generic
 
 instance NFData h => NFData (Handle h) where
-    rnf (Handle handleRaw handlePath) = rnf handleRaw `seq` rnf handlePath
+  rnf (Handle handleRaw handlePath) = rnf handleRaw `seq` rnf handlePath
 
 instance Eq h => Eq (Handle h) where
   (==) = (==) `on` handleRaw
@@ -270,80 +277,92 @@ instance Eq h => Eq (Handle h) where
 instance Show (Handle h) where
   show (Handle _ fp) = "<Handle " ++ fsToFilePath (MountPoint "<root>") fp ++ ">"
 
-
 {-------------------------------------------------------------------------------
   Offset wrappers
 -------------------------------------------------------------------------------}
 
-newtype AbsOffset = AbsOffset { unAbsOffset :: Word64 }
+newtype AbsOffset = AbsOffset {unAbsOffset :: Word64}
   deriving (Eq, Ord, Enum, Bounded, Num, Show)
 
 {-------------------------------------------------------------------------------
   Errors
 -------------------------------------------------------------------------------}
 
-data FsError = FsError {
-      -- | Error type
-      fsErrorType   :: FsErrorType
-
-      -- | Path to the file
-    , fsErrorPath   :: FsErrorPath
-
-      -- | Human-readable string giving additional information about the error
-    , fsErrorString :: String
-
-      -- | The 'Errno', if available. This is more precise than the
-      -- 'FsErrorType'.
-    , fsErrorNo     :: Maybe Errno
-
-      -- | Call stack
-    , fsErrorStack  :: PrettyCallStack
-
-      -- | Is this error due to a limitation of the mock file system?
-      --
-      -- The mock file system does not all of Posix's features and quirks.
-      -- This flag will be set for such unsupported IO calls. Real I/O calls
-      -- would not have thrown an error for these calls.
-    , fsLimitation  :: Bool
-    }
+data FsError = FsError
+  { fsErrorType :: FsErrorType
+  -- ^ Error type
+  , fsErrorPath :: FsErrorPath
+  -- ^ Path to the file
+  , fsErrorString :: String
+  -- ^ Human-readable string giving additional information about the error
+  , fsErrorNo :: Maybe Errno
+  -- ^ The 'Errno', if available. This is more precise than the
+  -- 'FsErrorType'.
+  , fsErrorStack :: PrettyCallStack
+  -- ^ Call stack
+  , fsLimitation :: Bool
+  -- ^ Is this error due to a limitation of the mock file system?
+  --
+  -- The mock file system does not all of Posix's features and quirks.
+  -- This flag will be set for such unsupported IO calls. Real I/O calls
+  -- would not have thrown an error for these calls.
+  }
 
 -- This is a custom instance and not an auto-derive one, since 'Errno' does not
 -- have a 'Show' instance, and we don't want to provide an orphan instance for
 -- this @base@ type.
 instance Show FsError where
-  showsPrec n fserr = showParen (n >= 11) $
-        showString "FsError {"
-      . showString "fsErrorType = " . shows fsErrorType . showCommaSpace
-      . showString "fsErrorPath = " . shows fsErrorPath . showCommaSpace
-      . showString "fsErrorString = " . shows fsErrorString . showCommaSpace
-      . showString "fsErrorNo = " . showsFsErrNo fsErrorNo . showCommaSpace
-      . showString "fsErrorStack = " . shows fsErrorStack . showCommaSpace
-      . showString "fsLimitation = " . shows fsLimitation
-      . showString "}"
-    where
-      -- Quite a bit of boilerplate, but it should ensure that we won't silently
-      -- change/forget to change the Show instance when fields are
-      -- changed/re-ordered/added.
-      FsError {
-          fsErrorType = fsErrorType :: FsErrorType
-        , fsErrorPath = fsErrorPath :: FsErrorPath
-        , fsErrorString = fsErrorString :: String
-        , fsErrorNo = fsErrorNo :: Maybe Errno
-        , fsErrorStack = fsErrorStack :: PrettyCallStack
-        , fsLimitation = fsLimitation :: Bool
-        } = fserr
-      _coveredAllCases = case fserr of
-        FsError (_ :: FsErrorType) (_ :: FsErrorPath) (_ :: String)
-                (_ :: Maybe Errno) (_ :: PrettyCallStack) (_ :: Bool) -> ()
+  showsPrec n fserr =
+    showParen (n >= 11) $
+      showString "FsError {"
+        . showString "fsErrorType = "
+        . shows fsErrorType
+        . showCommaSpace
+        . showString "fsErrorPath = "
+        . shows fsErrorPath
+        . showCommaSpace
+        . showString "fsErrorString = "
+        . shows fsErrorString
+        . showCommaSpace
+        . showString "fsErrorNo = "
+        . showsFsErrNo fsErrorNo
+        . showCommaSpace
+        . showString "fsErrorStack = "
+        . shows fsErrorStack
+        . showCommaSpace
+        . showString "fsLimitation = "
+        . shows fsLimitation
+        . showString "}"
+   where
+    -- Quite a bit of boilerplate, but it should ensure that we won't silently
+    -- change/forget to change the Show instance when fields are
+    -- changed/re-ordered/added.
+    FsError
+      { fsErrorType = fsErrorType :: FsErrorType
+      , fsErrorPath = fsErrorPath :: FsErrorPath
+      , fsErrorString = fsErrorString :: String
+      , fsErrorNo = fsErrorNo :: Maybe Errno
+      , fsErrorStack = fsErrorStack :: PrettyCallStack
+      , fsLimitation = fsLimitation :: Bool
+      } = fserr
+    _coveredAllCases = case fserr of
+      FsError
+        (_ :: FsErrorType)
+        (_ :: FsErrorPath)
+        (_ :: String)
+        (_ :: Maybe Errno)
+        (_ :: PrettyCallStack)
+        (_ :: Bool) -> ()
 
-      showsFsErrNo Nothing          = showString "Nothing"
-      showsFsErrNo (Just (Errno e)) = showString "Just "
-                                    . showParen True (showString "Errno " . shows e)
+    showsFsErrNo Nothing = showString "Nothing"
+    showsFsErrNo (Just (Errno e)) =
+      showString "Just "
+        . showParen True (showString "Errno " . shows e)
 
 data FsErrorType
   = FsIllegalOperation
-  | FsResourceInappropriateType
-  -- ^ e.g the user tried to open a directory with hOpen rather than a file.
+  | -- | e.g the user tried to open a directory with hOpen rather than a file.
+    FsResourceInappropriateType
   | FsResourceAlreadyInUse
   | FsResourceDoesNotExist
   | FsResourceAlreadyExist
@@ -352,26 +371,28 @@ data FsErrorType
   | FsTooManyOpenFiles
   | FsInsufficientPermissions
   | FsInvalidArgument
-  | FsOther
-    -- ^ Used for all other error types
+  | -- | Used for all other error types
+    FsOther
   deriving (Show, Eq)
 
 instance Exception FsError where
-    displayException = prettyFsError
+  displayException = prettyFsError
 
 -- | Check if two errors are semantically the same error
 --
 -- This ignores the error string, the errno, and the callstack.
 sameFsError :: FsError -> FsError -> Bool
-sameFsError e e' = fsErrorType e == fsErrorType e'
-                && fsErrorPath e == fsErrorPath e'
+sameFsError e e' =
+  fsErrorType e == fsErrorType e'
+    && fsErrorPath e == fsErrorPath e'
 
 isFsErrorType :: FsErrorType -> FsError -> Bool
 isFsErrorType ty e = fsErrorType e == ty
 
 prettyFsError :: FsError -> String
-prettyFsError FsError{..} = concat [
-      show fsErrorType
+prettyFsError FsError{..} =
+  concat
+    [ show fsErrorType
     , " for "
     , show fsErrorPath
     , ": "
@@ -392,19 +413,21 @@ hasMountPoint FsError{fsErrorPath = FsErrorPath mp _} = isJust mp
 -- We take the 'FsPath' as an argument. We could try to translate back from a
 -- 'FilePath' to an 'FsPath' (given a 'MountPoint'), but we know the 'FsPath'
 -- at all times anyway and not all IO exceptions actually include a filepath.
-ioToFsError :: HasCallStack
-            => FsErrorPath -> IOError -> FsError
-ioToFsError fep ioErr = FsError
-    { fsErrorType   = ioToFsErrorType ioErr
-    , fsErrorPath   = fep
-      -- We don't use 'ioeGetErrorString', because that only returns the
+ioToFsError ::
+  HasCallStack =>
+  FsErrorPath -> IOError -> FsError
+ioToFsError fep ioErr =
+  FsError
+    { fsErrorType = ioToFsErrorType ioErr
+    , fsErrorPath = fep
+    , -- We don't use 'ioeGetErrorString', because that only returns the
       -- description in case 'isUserErrorType' is true, otherwise it will
       -- return 'ioToFsErrorType', which we already include in 'fsErrorType'.
       -- So we use the underlying field directly.
-    , fsErrorString = GHC.ioe_description ioErr
-    , fsErrorNo     = Errno <$> GHC.ioe_errno ioErr
-    , fsErrorStack  = prettyCallStack
-    , fsLimitation  = False
+      fsErrorString = GHC.ioe_description ioErr
+    , fsErrorNo = Errno <$> GHC.ioe_errno ioErr
+    , fsErrorStack = prettyCallStack
+    , fsLimitation = False
     }
 
 -- | Assign an 'FsErrorType' to the given 'IOError'.
@@ -420,46 +443,37 @@ ioToFsError fep ioErr = FsError
 -- See the ERRNO(3) man page for the meaning of the different errnos.
 ioToFsErrorType :: IOError -> FsErrorType
 ioToFsErrorType ioErr = case Errno <$> GHC.ioe_errno ioErr of
-    Just errno
-      |  errno == C.eACCES
-      || errno == C.eROFS
-      || errno == C.ePERM
-      -> FsInsufficientPermissions
-
-      |  errno == C.eNOSPC
-      -> FsDeviceFull
-
-      |  errno == C.eMFILE
-      || errno == C.eNFILE
-      -> FsTooManyOpenFiles
-
-      |  errno == C.eNOENT
-      || errno == C.eNXIO
-      -> FsResourceDoesNotExist
-
-    _ | IO.isAlreadyInUseErrorType eType
-      -> FsResourceAlreadyInUse
-
-      | IO.isAlreadyExistsErrorType eType
-      -> FsResourceAlreadyExist
-
-      | IO.isEOFErrorType eType
-      -> FsReachedEOF
-
-      | IO.isIllegalOperationErrorType eType
-      -> FsIllegalOperation
-
-      | eType == GHC.InappropriateType
-      -> FsResourceInappropriateType
-
-      | eType == GHC.InvalidArgument
-      -> FsInvalidArgument
-
-      | otherwise
-      -> FsOther
-  where
-    eType :: IO.IOErrorType
-    eType = IO.ioeGetErrorType ioErr
+  Just errno
+    | errno == C.eACCES
+        || errno == C.eROFS
+        || errno == C.ePERM ->
+        FsInsufficientPermissions
+    | errno == C.eNOSPC ->
+        FsDeviceFull
+    | errno == C.eMFILE
+        || errno == C.eNFILE ->
+        FsTooManyOpenFiles
+    | errno == C.eNOENT
+        || errno == C.eNXIO ->
+        FsResourceDoesNotExist
+  _
+    | IO.isAlreadyInUseErrorType eType ->
+        FsResourceAlreadyInUse
+    | IO.isAlreadyExistsErrorType eType ->
+        FsResourceAlreadyExist
+    | IO.isEOFErrorType eType ->
+        FsReachedEOF
+    | IO.isIllegalOperationErrorType eType ->
+        FsIllegalOperation
+    | eType == GHC.InappropriateType ->
+        FsResourceInappropriateType
+    | eType == GHC.InvalidArgument ->
+        FsInvalidArgument
+    | otherwise ->
+        FsOther
+ where
+  eType :: IO.IOErrorType
+  eType = IO.ioeGetErrorType ioErr
 
 {-------------------------------------------------------------------------------
   Condense instances
@@ -467,14 +481,14 @@ ioToFsErrorType ioErr = case Errno <$> GHC.ioe_errno ioErr of
 
 instance Condense AllowExisting where
   condense AllowExisting = ""
-  condense MustBeNew     = "!"
-  condense MustExist     = "+"
+  condense MustBeNew = "!"
+  condense MustExist = "+"
 
 instance Condense OpenMode where
-    condense ReadMode           = "r"
-    condense (WriteMode     ex) = "w"  ++ condense ex
-    condense (ReadWriteMode ex) = "rw" ++ condense ex
-    condense (AppendMode    ex) = "a"  ++ condense ex
+  condense ReadMode = "r"
+  condense (WriteMode ex) = "w" ++ condense ex
+  condense (ReadWriteMode ex) = "rw" ++ condense ex
+  condense (AppendMode ex) = "a" ++ condense ex
 
 instance Condense (Handle h) where
   condense = show

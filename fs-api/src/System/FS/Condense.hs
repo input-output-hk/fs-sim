@@ -1,30 +1,30 @@
-{-# LANGUAGE DerivingVia          #-}
-{-# LANGUAGE FlexibleContexts     #-}
-{-# LANGUAGE FlexibleInstances    #-}
-{-# LANGUAGE StandaloneDeriving   #-}
+{-# LANGUAGE DerivingVia #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 -- | Condensed but human-readable output (like 'Show').
-module System.FS.Condense (
-    Condense (..)
+module System.FS.Condense
+  ( Condense (..)
   , Condense1 (..)
   , condense1
   ) where
 
 import qualified Data.ByteString as BS.Strict
 import qualified Data.ByteString.Lazy as BS.Lazy
-import           Data.Int
-import           Data.List (intercalate)
-import           Data.Map.Strict (Map)
+import Data.Int
+import Data.List (intercalate)
+import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
-import           Data.Set (Set)
+import Data.Set (Set)
 import qualified Data.Set as Set
-import           Data.Text (Text, unpack)
-import           Data.Void
-import           Data.Word
-import           Numeric.Natural
-import           System.IO (SeekMode (..))
-import           Text.Printf (printf)
+import Data.Text (Text, unpack)
+import Data.Void
+import Data.Word
+import Numeric.Natural
+import System.IO (SeekMode (..))
+import Text.Printf (printf)
 
 {-------------------------------------------------------------------------------
   Main class
@@ -87,7 +87,7 @@ instance Condense a => Condense [a] where
 
 instance Condense a => Condense (Maybe a) where
   condense (Just a) = "Just " ++ condense a
-  condense Nothing  = "Nothing"
+  condense Nothing = "Nothing"
 
 instance Condense a => Condense (Set a) where
   condense = condense1
@@ -116,4 +116,4 @@ instance Condense BS.Lazy.ByteString where
 instance Condense SeekMode where
   condense RelativeSeek = "r"
   condense AbsoluteSeek = "a"
-  condense SeekFromEnd  = "e"
+  condense SeekFromEnd = "e"

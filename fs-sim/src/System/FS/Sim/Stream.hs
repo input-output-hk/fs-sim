@@ -1,27 +1,32 @@
-{-# LANGUAGE DeriveFunctor       #-}
+{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | Finite and infinite streams of @'Maybe' a@s.
-module System.FS.Sim.Stream (
-    -- * Streams
+module System.FS.Sim.Stream
+  ( -- * Streams
     Stream (..)
   , InternalInfo (..)
+
     -- * Running
   , runStream
   , runStreamN
   , runStreamIndefinitely
+
     -- * Construction
   , always
   , empty
   , repeating
   , unsafeMkInfinite
   , unsafeMkFinite
+
     -- * Modify
   , filter
+
     -- * Query
   , null
   , isFinite
   , isInfinite
+
     -- * Generation and shrinking
   , genFinite
   , genFiniteN
@@ -31,42 +36,42 @@ module System.FS.Sim.Stream (
   , liftShrinkStream
   ) where
 
-import           Control.Monad (replicateM)
-import           Prelude hiding (filter, isInfinite, null)
-import qualified Prelude
+import Control.Monad (replicateM)
+import Test.QuickCheck (Gen)
 import qualified Test.QuickCheck as QC
-import           Test.QuickCheck (Gen)
+import Prelude hiding (filter, isInfinite, null)
+import qualified Prelude
 
 {-------------------------------------------------------------------------------
   Streams
 -------------------------------------------------------------------------------}
 
 -- | A stream of @'Maybe' a@s that can be infinite.
-data Stream a =
-  -- | UNSAFE: when constructing, modifying, or accessing the internals of a
-  -- 'Stream', it is the responsibility of the user to preserve the following
-  -- invariant:
-  --
-  -- INVARIANT: if the stream is marked as 'Infinite', then the internal list
-  -- should be infinite. If the stream is marked as 'Finite', then the internal
-  -- list should finite.
-  --
-  -- * If the internal list is infinite but marked as 'Finite', then 'QC.shrink'
-  --   or 'show' on the corresponding stream will diverge.
-  --
-  -- * If the internal list is finite but marked as 'Infinite', then 'QC.shrink'
-  --   on the corresponding stream will degrade to an infinite list of empty
-  --   streams.
-  UnsafeStream {
-      -- | UNSAFE: see 'UnsafeStream' for more information.
-      --
-      -- Info about the finiteness of the stream. It is used for 'QC.shrink'ing
-      -- and the 'Show' instance.
-      unsafeStreamInternalInfo :: InternalInfo
-      -- | UNSAFE: see 'UnsafeStream' for more information.
-      --
-      -- The internal list underlying the stream.
-    , unsafeStreamList         :: [Maybe a]
+data Stream a
+  = -- | UNSAFE: when constructing, modifying, or accessing the internals of a
+    -- 'Stream', it is the responsibility of the user to preserve the following
+    -- invariant:
+    --
+    -- INVARIANT: if the stream is marked as 'Infinite', then the internal list
+    -- should be infinite. If the stream is marked as 'Finite', then the internal
+    -- list should finite.
+    --
+    -- * If the internal list is infinite but marked as 'Finite', then 'QC.shrink'
+    --   or 'show' on the corresponding stream will diverge.
+    --
+    -- * If the internal list is finite but marked as 'Infinite', then 'QC.shrink'
+    --   on the corresponding stream will degrade to an infinite list of empty
+    --   streams.
+    UnsafeStream
+    { unsafeStreamInternalInfo :: InternalInfo
+    -- ^ UNSAFE: see 'UnsafeStream' for more information.
+    --
+    -- Info about the finiteness of the stream. It is used for 'QC.shrink'ing
+    -- and the 'Show' instance.
+    , unsafeStreamList :: [Maybe a]
+    -- ^ UNSAFE: see 'UnsafeStream' for more information.
+    --
+    -- The internal list underlying the stream.
     }
   deriving Functor
 
@@ -80,11 +85,12 @@ data InternalInfo = Infinite | Finite
 -- it is infinite.
 instance Show a => Show (Stream a) where
   showsPrec n (UnsafeStream info xs) = case info of
-      Infinite -> ("<infinite stream>" ++)
-      Finite   -> (if n > 10 then ('(':) else id)
-                . shows xs
-                . (" ++ ..." ++)
-                . (if n > 10 then (')':) else id)
+    Infinite -> ("<infinite stream>" ++)
+    Finite ->
+      (if n > 10 then ('(' :) else id)
+        . shows xs
+        . (" ++ ..." ++)
+        . (if n > 10 then (')' :) else id)
 
 {-------------------------------------------------------------------------------
   Running
@@ -95,8 +101,8 @@ instance Show a => Show (Stream a) where
 --
 -- Returns 'Nothing' by default if the 'Stream' is empty.
 runStream :: Stream a -> (Maybe a, Stream a)
-runStream s@(UnsafeStream _    []    ) = (Nothing, s)
-runStream   (UnsafeStream info (a:as)) = (a, UnsafeStream info as)
+runStream s@(UnsafeStream _ []) = (Nothing, s)
+runStream (UnsafeStream info (a : as)) = (a, UnsafeStream info as)
 
 -- | \( O(n) \): like 'runStream', but advancing the stream @n@ times.
 --
@@ -106,8 +112,8 @@ runStreamN n s
   | n <= 0 = ([], s)
   | otherwise =
       let (x, s') = runStream s
-          (xs, s'') = runStreamN (n-1) s'
-      in  (x:xs, s'')
+          (xs, s'') = runStreamN (n - 1) s'
+       in (x : xs, s'')
 
 -- | \( O(\infty) \): like 'runStream', but advancing the stream indefinitely.
 --
@@ -164,16 +170,16 @@ filter p (UnsafeStream info xs) = UnsafeStream info (Prelude.filter p xs)
 -- be empty. In particular, @'null' ('always' Nothing) /= True@.
 null :: Stream a -> Bool
 null (UnsafeStream Finite []) = True
-null _                        = False
+null _ = False
 
 -- | Check that the stream is finite
 isFinite :: Stream a -> Bool
-isFinite (UnsafeStream Finite _)   = True
+isFinite (UnsafeStream Finite _) = True
 isFinite (UnsafeStream Infinite _) = False
 
 -- | Check that the stream is infinite
 isInfinite :: Stream a -> Bool
-isInfinite (UnsafeStream Finite _)   = False
+isInfinite (UnsafeStream Finite _) = False
 isInfinite (UnsafeStream Infinite _) = True
 
 {-------------------------------------------------------------------------------
@@ -194,14 +200,14 @@ isInfinite (UnsafeStream Infinite _) = True
 --   finiteness.
 shrinkStream :: Stream a -> [Stream a]
 shrinkStream (UnsafeStream info xs0) = case info of
-    Infinite -> UnsafeStream Finite <$> [take n xs0 | n <- map (2^) [0 :: Int ..]]
-    Finite   -> UnsafeStream Finite <$> QC.shrinkList (const []) xs0
+  Infinite -> UnsafeStream Finite <$> [take n xs0 | n <- map (2 ^) [0 :: Int ..]]
+  Finite -> UnsafeStream Finite <$> QC.shrinkList (const []) xs0
 
 -- | Like 'shrinkStream', but with a custom shrinker for elements of the stream.
 liftShrinkStream :: (Maybe a -> [Maybe a]) -> Stream a -> [Stream a]
 liftShrinkStream shrinkOne (UnsafeStream info xs0) = case info of
-    Infinite -> UnsafeStream Finite <$> [take n xs0 | n <- map (2^) [0 :: Int ..]]
-    Finite   -> UnsafeStream Finite <$> QC.shrinkList shrinkOne xs0
+  Infinite -> UnsafeStream Finite <$> [take n xs0 | n <- map (2 ^) [0 :: Int ..]]
+  Finite -> UnsafeStream Finite <$> QC.shrinkList shrinkOne xs0
 
 -- | Make a @'Maybe' a@ generator based on an @a@ generator.
 --
@@ -209,30 +215,34 @@ liftShrinkStream shrinkOne (UnsafeStream info xs0) = case info of
 -- with the given @a@ generator (wrapped in a 'Just'). These /likelihoods/ are
 -- passed to 'QC.frequency'.
 genMaybe ::
-     Int -- ^ Likelihood of 'Nothing'
-  -> Int -- ^ Likelihood of @'Just' a@
-  -> Gen a
-  -> Gen (Maybe a)
-genMaybe nLi jLi genA = QC.frequency
+  -- | Likelihood of 'Nothing'
+  Int ->
+  -- | Likelihood of @'Just' a@
+  Int ->
+  Gen a ->
+  Gen (Maybe a)
+genMaybe nLi jLi genA =
+  QC.frequency
     [ (nLi, return Nothing)
     , (jLi, Just <$> genA)
     ]
 
 -- | Generate a finite 'Stream' of length @n@.
 genFiniteN ::
-     Int -- ^ Requested size of finite stream.
-  -> Gen (Maybe a)
-  -> Gen (Stream a)
+  -- | Requested size of finite stream.
+  Int ->
+  Gen (Maybe a) ->
+  Gen (Stream a)
 genFiniteN n gen = UnsafeStream Finite <$> replicateM n gen
 
 -- | Generate a sized, finite 'Stream'.
 genFinite ::
-     Gen (Maybe a)
-  -> Gen (Stream a)
+  Gen (Maybe a) ->
+  Gen (Stream a)
 genFinite gen = UnsafeStream Finite <$> QC.listOf gen
 
 -- | Generate an infinite 'Stream'.
 genInfinite ::
-     Gen (Maybe a)
-  -> Gen (Stream a)
+  Gen (Maybe a) ->
+  Gen (Stream a)
 genInfinite gen = UnsafeStream Infinite <$> QC.infiniteListOf gen

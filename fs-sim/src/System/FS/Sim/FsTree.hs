@@ -1,9 +1,9 @@
-{-# LANGUAGE BangPatterns        #-}
-{-# LANGUAGE DeriveAnyClass      #-}
-{-# LANGUAGE DeriveFunctor       #-}
-{-# LANGUAGE DeriveGeneric       #-}
-{-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | Internal part of the mock file system
@@ -12,17 +12,20 @@
 --
 -- > import           System.FS.Sim.FsTree (FsTree)
 -- > import qualified System.FS.Sim.FsTree as FS
-module System.FS.Sim.FsTree (
-    -- * FsTree type and indexing functions
+module System.FS.Sim.FsTree
+  ( -- * FsTree type and indexing functions
     FsTree (..)
   , FsTreeError (..)
   , example
+
     -- * Construction
   , empty
+
     -- * Indexing
   , getDir
   , getFile
   , index
+
     -- * File system operations
   , createDirIfMissing
   , createDirWithParents
@@ -31,24 +34,25 @@ module System.FS.Sim.FsTree (
   , removeFile
   , renameFile
   , replace
+
     -- * Path-listing
   , find
+
     -- * Pretty-printing
   , pretty
   ) where
 
-import           Data.Functor.Const
-import           Data.List.NonEmpty (NonEmpty (..))
-import           Data.Map.Strict (Map)
+import Data.Functor.Const
+import Data.List.NonEmpty (NonEmpty (..))
+import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
-import           Data.Maybe (fromMaybe)
-import           Data.Text (Text)
+import Data.Maybe (fromMaybe)
+import Data.Text (Text)
 import qualified Data.Text as Text
-import           Data.Tree
-import           GHC.Generics (Generic)
-import           GHC.Stack
-
-import           System.FS.API.Types
+import Data.Tree
+import GHC.Generics (Generic)
+import GHC.Stack
+import System.FS.API.Types
 
 {-------------------------------------------------------------------------------
   FsTree type and general indexing functions
@@ -63,125 +67,167 @@ type Folder a = Map Text (FsTree a)
 -- | Example
 example :: Monoid a => FsTree a
 example =
-    Folder $ M.fromList [
-        ("usr", Folder $ M.fromList [
-            ("local", Folder $ M.fromList [
-                ("bin", Folder mempty)
-              ])
-          ])
-      , ("var", Folder $ M.fromList [
-            ("log",  Folder mempty)
-          , ("mail", Folder mempty)
-          , ("run",  Folder mempty)
-          , ("tmp",  Folder $ M.fromList [
-                ("foo.txt", File mempty)
-              ])
-          ])
+  Folder $
+    M.fromList
+      [
+        ( "usr"
+        , Folder $
+            M.fromList
+              [
+                ( "local"
+                , Folder $
+                    M.fromList
+                      [ ("bin", Folder mempty)
+                      ]
+                )
+              ]
+        )
+      ,
+        ( "var"
+        , Folder $
+            M.fromList
+              [ ("log", Folder mempty)
+              , ("mail", Folder mempty)
+              , ("run", Folder mempty)
+              ,
+                ( "tmp"
+                , Folder $
+                    M.fromList
+                      [ ("foo.txt", File mempty)
+                      ]
+                )
+              ]
+        )
       ]
 
 -- | File access error
-data FsTreeError =
-    -- | A path @../a/..@ where @a@ is a file rather than a dir
+data FsTreeError
+  = -- | A path @../a/..@ where @a@ is a file rather than a dir
     --
     -- We record both the full path and the invalid suffix.
     FsExpectedDir FsPath (NonEmpty Text)
-
-    -- | A path @../a/..@ where @a@ is a dir rather than a file
+  | -- | A path @../a/..@ where @a@ is a dir rather than a file
     --
     -- No suffix is specified (it /must/ be the last part of the file)
-  | FsExpectedFile FsPath
-
-    -- | A path @../a/..@ or @../a@ where directory or file @a@ is missing
+    FsExpectedFile FsPath
+  | -- | A path @../a/..@ or @../a@ where directory or file @a@ is missing
     --
     -- We record both the full path and the missing suffix.
-  | FsMissing FsPath (NonEmpty Text)
-
-    -- | A file was opened with the O_EXCL flag, but it already existed.
-  | FsExists FsPath
-  deriving (Show)
+    FsMissing FsPath (NonEmpty Text)
+  | -- | A file was opened with the O_EXCL flag, but it already existed.
+    FsExists FsPath
+  deriving Show
 
 setFsTreeErrorPath :: FsPath -> FsTreeError -> FsTreeError
-setFsTreeErrorPath fp (FsExpectedDir  _ suffix) = FsExpectedDir  fp suffix
-setFsTreeErrorPath fp (FsExpectedFile _)        = FsExpectedFile fp
-setFsTreeErrorPath fp (FsMissing      _ suffix) = FsMissing      fp suffix
-setFsTreeErrorPath fp (FsExists _)              = FsExists       fp
+setFsTreeErrorPath fp (FsExpectedDir _ suffix) = FsExpectedDir fp suffix
+setFsTreeErrorPath fp (FsExpectedFile _) = FsExpectedFile fp
+setFsTreeErrorPath fp (FsMissing _ suffix) = FsMissing fp suffix
+setFsTreeErrorPath fp (FsExists _) = FsExists fp
 
 {-------------------------------------------------------------------------------
   Altering
 -------------------------------------------------------------------------------}
 
 -- | Most general indexing function
-alterF :: forall f a. Functor f
-       => FsPath                                -- ^ Path to look for
-       -> (FsTreeError -> f (Maybe (FsTree a))) -- ^ Action on error
-       -> (FsTree a    -> f (Maybe (FsTree a))) -- ^ Alter the tree when found
-       -> (FsTree a    -> f (FsTree a))
+alterF ::
+  forall f a.
+  Functor f =>
+  -- | Path to look for
+  FsPath ->
+  -- | Action on error
+  (FsTreeError -> f (Maybe (FsTree a))) ->
+  -- | Alter the tree when found
+  (FsTree a -> f (Maybe (FsTree a))) ->
+  (FsTree a -> f (FsTree a))
 alterF fp onErr f = fmap (fromMaybe empty) . go (fsPathToList fp)
-  where
-    go :: [Text] -> FsTree a -> f (Maybe (FsTree a))
-    go []     t          = f t
-    go (p:ps) (File   _) = onErr (FsExpectedDir fp (p :| ps))
-    go (p:ps) (Folder m) = Just . Folder <$> M.alterF f' p m
-      where
-        f' :: Maybe (FsTree a) -> f (Maybe (FsTree a))
-        f' Nothing  = onErr (FsMissing fp (p :| ps))
-        f' (Just t) = go ps t
+ where
+  go :: [Text] -> FsTree a -> f (Maybe (FsTree a))
+  go [] t = f t
+  go (p : ps) (File _) = onErr (FsExpectedDir fp (p :| ps))
+  go (p : ps) (Folder m) = Just . Folder <$> M.alterF f' p m
+   where
+    f' :: Maybe (FsTree a) -> f (Maybe (FsTree a))
+    f' Nothing = onErr (FsMissing fp (p :| ps))
+    f' (Just t) = go ps t
 
-alterDir :: forall f a. Functor f
-         => FsPath
-         -> (FsTreeError -> f (FsTree a)) -- ^ Action on error
-         -> f (Folder a)                  -- ^ If directory does not exist
-         -> (Folder a -> f (Folder a))    -- ^ If directory exists
-         -> (FsTree a -> f (FsTree a))
+alterDir ::
+  forall f a.
+  Functor f =>
+  FsPath ->
+  -- | Action on error
+  (FsTreeError -> f (FsTree a)) ->
+  -- | If directory does not exist
+  f (Folder a) ->
+  -- | If directory exists
+  (Folder a -> f (Folder a)) ->
+  (FsTree a -> f (FsTree a))
 alterDir p onErr onNotExists onExists =
-    alterDirMaybe p
-      (fmap Just . onErr)
-      (fmap Just onNotExists)
-      (fmap Just . onExists)
+  alterDirMaybe
+    p
+    (fmap Just . onErr)
+    (fmap Just onNotExists)
+    (fmap Just . onExists)
 
 -- | alterDirMaybe might remove a directory
-alterDirMaybe :: forall f a. Functor f
-              => FsPath
-              -> (FsTreeError -> f (Maybe (FsTree a))) -- ^ Action on error
-              -> f (Maybe (Folder a))                  -- ^ If directory does not exist
-              -> (Folder a -> f (Maybe (Folder a)))    -- ^ If directory exists
-              -> (FsTree a -> f (FsTree a))
+alterDirMaybe ::
+  forall f a.
+  Functor f =>
+  FsPath ->
+  -- | Action on error
+  (FsTreeError -> f (Maybe (FsTree a))) ->
+  -- | If directory does not exist
+  f (Maybe (Folder a)) ->
+  -- | If directory exists
+  (Folder a -> f (Maybe (Folder a))) ->
+  (FsTree a -> f (FsTree a))
 alterDirMaybe p onErr onNotExists onExists = alterF p onErr' f
-  where
-    onErr' :: FsTreeError -> f (Maybe (FsTree a))
-    onErr' (FsMissing _ (_ :| [])) = fmap Folder <$> onNotExists
-    onErr' err                     = onErr err
+ where
+  onErr' :: FsTreeError -> f (Maybe (FsTree a))
+  onErr' (FsMissing _ (_ :| [])) = fmap Folder <$> onNotExists
+  onErr' err = onErr err
 
-    f :: FsTree a -> f (Maybe (FsTree a))
-    f (Folder m) = fmap Folder <$> onExists m
-    f (File   _) = onErr $ FsExpectedDir p (pathLast p :| [])
+  f :: FsTree a -> f (Maybe (FsTree a))
+  f (Folder m) = fmap Folder <$> onExists m
+  f (File _) = onErr $ FsExpectedDir p (pathLast p :| [])
 
-alterFileMaybe :: forall f a. Functor f
-               => FsPath
-               -> (FsTreeError -> f (Maybe (FsTree a))) -- ^ Action on error
-               -> f (Maybe a)                           -- ^ If file does not exist
-               -> (a -> f (Maybe a))                    -- ^ If file exists
-               -> (FsTree a -> f (FsTree a))
+alterFileMaybe ::
+  forall f a.
+  Functor f =>
+  FsPath ->
+  -- | Action on error
+  (FsTreeError -> f (Maybe (FsTree a))) ->
+  -- | If file does not exist
+  f (Maybe a) ->
+  -- | If file exists
+  (a -> f (Maybe a)) ->
+  (FsTree a -> f (FsTree a))
 alterFileMaybe p onErr onNotExists onExists = alterF p onErr' f
-  where
-    onErr' :: FsTreeError -> f (Maybe (FsTree a))
-    onErr' (FsMissing _ (_ :| [])) = fmap File <$> onNotExists
-    onErr' err                     = onErr err
+ where
+  onErr' :: FsTreeError -> f (Maybe (FsTree a))
+  onErr' (FsMissing _ (_ :| [])) = fmap File <$> onNotExists
+  onErr' err = onErr err
 
-    f :: FsTree a -> f (Maybe (FsTree a))
-    f (File   a) = fmap File <$> onExists a
-    f (Folder _) = onErr $ FsExpectedFile p
+  f :: FsTree a -> f (Maybe (FsTree a))
+  f (File a) = fmap File <$> onExists a
+  f (Folder _) = onErr $ FsExpectedFile p
 
-alterFile :: forall f a. Functor f
-          => FsPath
-          -> (FsTreeError -> f (FsTree a)) -- ^ Action on error
-          -> f a                           -- ^ If file does not exist
-          -> (a -> f a)                    -- ^ If file exists
-          -> (FsTree a -> f (FsTree a))
+alterFile ::
+  forall f a.
+  Functor f =>
+  FsPath ->
+  -- | Action on error
+  (FsTreeError -> f (FsTree a)) ->
+  -- | If file does not exist
+  f a ->
+  -- | If file exists
+  (a -> f a) ->
+  (FsTree a -> f (FsTree a))
 alterFile p onErr onNotExists onExists =
-    alterFileMaybe p (fmap Just . onErr) (fmap Just onNotExists)
-      (fmap Just . onExists)
-
+  alterFileMaybe
+    p
+    (fmap Just . onErr)
+    (fmap Just onNotExists)
+    (fmap Just . onExists)
 
 {-------------------------------------------------------------------------------
   Construction
@@ -196,16 +242,17 @@ empty = Folder M.empty
 
 pathLast :: HasCallStack => FsPath -> Text
 pathLast fp = case fsPathSplit fp of
-                Nothing     -> error "pathLast: empty path"
-                Just (_, p) -> p
+  Nothing -> error "pathLast: empty path"
+  Just (_, p) -> p
 
 pathInits :: FsPath -> [FsPath]
 pathInits = reverse . go
-  where
-    go :: FsPath -> [FsPath]
-    go fp = fp : case fsPathSplit fp of
-                   Nothing       -> []
-                   Just (fp', _) -> go fp'
+ where
+  go :: FsPath -> [FsPath]
+  go fp =
+    fp : case fsPathSplit fp of
+      Nothing -> []
+      Just (fp', _) -> go fp'
 
 {-------------------------------------------------------------------------------
   Indexing
@@ -217,15 +264,15 @@ index fp = getConst . alterF fp (Const . Left) (Const . Right)
 
 getFile :: FsPath -> FsTree a -> Either FsTreeError a
 getFile fp =
-    getConst . alterFile fp (Const . Left) errNotExist (Const . Right)
-  where
-    errNotExist = Const . Left $ FsMissing fp (pathLast fp :| [])
+  getConst . alterFile fp (Const . Left) errNotExist (Const . Right)
+ where
+  errNotExist = Const . Left $ FsMissing fp (pathLast fp :| [])
 
 getDir :: FsPath -> FsTree a -> Either FsTreeError (Folder a)
 getDir fp =
-    getConst . alterDir fp (Const . Left) errNotExist (Const . Right)
-  where
-    errNotExist = Const . Left $ FsMissing fp (pathLast fp :| [])
+  getConst . alterDir fp (Const . Left) errNotExist (Const . Right)
+ where
+  errNotExist = Const . Left $ FsMissing fp (pathLast fp :| [])
 
 {-------------------------------------------------------------------------------
   Specific file system functions
@@ -235,26 +282,27 @@ getDir fp =
 --    1. It existed already while we were supposed to create it from scratch
 --        (when passed 'MustBeNew').
 --    2. It did not already exists when we expected to (when passed 'MustExist').
-openFile :: Monoid a
-         => FsPath -> AllowExisting -> FsTree a -> Either FsTreeError (FsTree a)
+openFile ::
+  Monoid a =>
+  FsPath -> AllowExisting -> FsTree a -> Either FsTreeError (FsTree a)
 openFile fp ex = alterFile fp Left caseDoesNotExist caseAlreadyExist
-  where
-    caseAlreadyExist a = case ex of
-      AllowExisting -> Right a
-      MustBeNew     -> Left (FsExists fp)
-      MustExist     -> Right a
+ where
+  caseAlreadyExist a = case ex of
+    AllowExisting -> Right a
+    MustBeNew -> Left (FsExists fp)
+    MustExist -> Right a
 
-    caseDoesNotExist = case ex of
-      AllowExisting -> Right mempty
-      MustBeNew     -> Right mempty
-      MustExist     -> Left (FsMissing fp (pathLast fp :| []))
+  caseDoesNotExist = case ex of
+    AllowExisting -> Right mempty
+    MustBeNew -> Right mempty
+    MustExist -> Left (FsMissing fp (pathLast fp :| []))
 
 -- | Replace the contents of the specified file (which must exist)
 replace :: FsPath -> a -> FsTree a -> Either FsTreeError (FsTree a)
 replace fp new =
-    alterFile fp Left errNotExist (\_old -> Right new)
-  where
-    errNotExist = Left (FsMissing fp (pathLast fp :| []))
+  alterFile fp Left errNotExist (\_old -> Right new)
+ where
+  errNotExist = Left (FsMissing fp (pathLast fp :| []))
 
 -- | Create a directory if it does not already exist
 createDirIfMissing :: FsPath -> FsTree a -> Either FsTreeError (FsTree a)
@@ -263,44 +311,44 @@ createDirIfMissing fp = alterDir fp Left (Right M.empty) Right
 -- | Create a directory and its parents if they do not already exist
 createDirWithParents :: FsPath -> FsTree a -> Either FsTreeError (FsTree a)
 createDirWithParents fp =
-      -- Report full path in the error, not the prefix at the point of failure
-      either (Left . setFsTreeErrorPath fp) Right
+  -- Report full path in the error, not the prefix at the point of failure
+  either (Left . setFsTreeErrorPath fp) Right
     . repeatedlyM createDirIfMissing (pathInits fp)
-  where
-    repeatedlyM :: Monad m => (a -> b -> m b) -> ([a] -> b -> m b)
-    repeatedlyM = flip . foldlM' . flip
+ where
+  repeatedlyM :: Monad m => (a -> b -> m b) -> ([a] -> b -> m b)
+  repeatedlyM = flip . foldlM' . flip
 
-    foldlM' :: forall m a b. Monad m => (b -> a -> m b) -> b -> [a] -> m b
-    foldlM' f = go
-      where
-        go :: b -> [a] -> m b
-        go !acc []     = return acc
-        go !acc (x:xs) = f acc x >>= \acc' -> go acc' xs
+  foldlM' :: forall m a b. Monad m => (b -> a -> m b) -> b -> [a] -> m b
+  foldlM' f = go
+   where
+    go :: b -> [a] -> m b
+    go !acc [] = return acc
+    go !acc (x : xs) = f acc x >>= \acc' -> go acc' xs
 
 -- | Remove a directory (which must exist) and its contents
 removeDirRecursive :: FsPath -> FsTree a -> Either FsTreeError (FsTree a)
 removeDirRecursive fp =
-    alterDirMaybe fp Left errNotExist (const (Right Nothing))
-  where
-    errNotExist = Left (FsMissing fp (pathLast fp :| []))
+  alterDirMaybe fp Left errNotExist (const (Right Nothing))
+ where
+  errNotExist = Left (FsMissing fp (pathLast fp :| []))
 
 -- | Remove a file (which must exist)
 removeFile :: FsPath -> FsTree a -> Either FsTreeError (FsTree a)
 removeFile fp =
-    alterFileMaybe fp Left errNotExist (const (Right Nothing))
-  where
-    errNotExist = Left (FsMissing fp (pathLast fp :| []))
+  alterFileMaybe fp Left errNotExist (const (Right Nothing))
+ where
+  errNotExist = Left (FsMissing fp (pathLast fp :| []))
 
 -- | Rename the file (which must exist) from the first path to the second
 -- path. If there is already a file at the latter path, it is replaced by the
 -- new one.
 renameFile :: FsPath -> FsPath -> FsTree a -> Either FsTreeError (FsTree a)
 renameFile fpOld fpNew tree = do
-    oldF  <- getFile fpOld tree
-    -- Remove the old file
-    tree' <- removeFile fpOld tree
-    -- Overwrite the new file with the old one
-    alterFile fpNew Left (Right oldF) (const (Right oldF)) tree'
+  oldF <- getFile fpOld tree
+  -- Remove the old file
+  tree' <- removeFile fpOld tree
+  -- Overwrite the new file with the old one
+  alterFile fpNew Left (Right oldF) (const (Right oldF)) tree'
 
 {-------------------------------------------------------------------------------
   Path-listing
@@ -330,26 +378,28 @@ renameFile fpOld fpNew tree = do
 --
 -- If the given file system path does not exist, a (Left FsMissing{}) is
 -- returned.
-find :: forall a . FsPath -> FsTree a -> Either FsTreeError [FsPath]
+find :: forall a. FsPath -> FsTree a -> Either FsTreeError [FsPath]
 find fp fs = fmap (appendStartingDir . findTree) $ getDir fp fs
-  where
-    appendStartingDir :: [[Text]] -> [FsPath]
-    appendStartingDir fps = fmap fsPathFromList
-                          $ fmap (fsPathToList fp <>)
-                          $ []: fps
+ where
+  appendStartingDir :: [[Text]] -> [FsPath]
+  appendStartingDir fps =
+    fmap fsPathFromList $
+      fmap (fsPathToList fp <>) $
+        [] : fps
 
-    findTree :: Folder a -> [[Text]]
-    findTree folder = concat
-                    $ fmap appendFileNameAndFind
-                    $ M.toList folder
-      where
-        appendFileNameAndFind :: (Text, FsTree a) -> [[Text]]
-        appendFileNameAndFind (fileName, t) =
-            [fileName] : (fmap ([fileName] <>) $ findFsTree t)
+  findTree :: Folder a -> [[Text]]
+  findTree folder =
+    concat $
+      fmap appendFileNameAndFind $
+        M.toList folder
+   where
+    appendFileNameAndFind :: (Text, FsTree a) -> [[Text]]
+    appendFileNameAndFind (fileName, t) =
+      [fileName] : (fmap ([fileName] <>) $ findFsTree t)
 
-        findFsTree :: FsTree a -> [[Text]]
-        findFsTree (File   _      ) = []
-        findFsTree (Folder folder') = findTree folder'
+    findFsTree :: FsTree a -> [[Text]]
+    findFsTree (File _) = []
+    findFsTree (Folder folder') = findTree folder'
 
 {-------------------------------------------------------------------------------
   Pretty-printing
@@ -357,17 +407,17 @@ find fp fs = fmap (appendStartingDir . findTree) $ getDir fp fs
 
 pretty :: forall a. (a -> String) -> FsTree a -> String
 pretty f = drawTree . fmap renderNode . toTree
-  where
-    renderNode :: (Text, Maybe a) -> String
-    renderNode (fp, Nothing) = Text.unpack fp
-    renderNode (fp, Just a)  = Text.unpack fp ++ ": " ++ f a
+ where
+  renderNode :: (Text, Maybe a) -> String
+  renderNode (fp, Nothing) = Text.unpack fp
+  renderNode (fp, Just a) = Text.unpack fp ++ ": " ++ f a
 
 -- | Translate to a tree
 toTree :: FsTree a -> Tree (Text, Maybe a)
 toTree = \case
-    File   _ -> error "toTree: root must be directory"
-    Folder m -> Node ("/", Nothing) $ map go (M.toList m)
-  where
-    go :: (Text, FsTree a) -> Tree (Text, Maybe a)
-    go (parent, File   a) = Node (parent, Just a) []
-    go (parent, Folder m) = Node (parent, Nothing) $ map go (M.toList m)
+  File _ -> error "toTree: root must be directory"
+  Folder m -> Node ("/", Nothing) $ map go (M.toList m)
+ where
+  go :: (Text, FsTree a) -> Tree (Text, Maybe a)
+  go (parent, File a) = Node (parent, Just a) []
+  go (parent, Folder m) = Node (parent, Nothing) $ map go (M.toList m)
