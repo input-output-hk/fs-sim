@@ -1,10 +1,10 @@
-{-# LANGUAGE CPP            #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE PackageImports #-}
 
 -- | This module is mainly meant to be used for the 'IO' implementation of
 -- 'System.FS.API.HasFS'.
-module System.FS.IO.Unix (
-    FHandle
+module System.FS.IO.Unix
+  ( FHandle
   , close
   , getSize
   , open
@@ -19,23 +19,29 @@ module System.FS.IO.Unix (
   , writeBuf
   ) where
 
-import           Prelude hiding (read, truncate)
-
-import           Control.Monad (void)
-import           Data.ByteString (ByteString)
+import Control.Monad (void)
+import Data.ByteString (ByteString)
 import qualified Data.ByteString.Internal as Internal
-import           Data.Int (Int64)
-import           Data.Word (Word32, Word64, Word8)
-import           Foreign (Ptr)
-import           System.FS.API.Types (AllowExisting (..), OpenMode (..),
-                     SeekMode (..))
-import           System.FS.IO.Handle
+import Data.Int (Int64)
+import Data.Word (Word32, Word64, Word8)
+import Foreign (Ptr)
+import System.FS.API.Types
+  ( AllowExisting (..)
+  , OpenMode (..)
+  , SeekMode (..)
+  )
+import System.FS.IO.Handle
+import System.Posix (ByteCount, Fd (..), FileOffset)
 import qualified System.Posix as Posix
-import           System.Posix (ByteCount, Fd (..), FileOffset)
-import qualified System.Posix.IO.ByteString.Ext as Posix (fdPreadBuf,
-                     fdPwriteBuf)
+import qualified System.Posix.IO.ByteString.Ext as Posix
+  ( fdPreadBuf
+  , fdPwriteBuf
+  )
+import Prelude hiding (read, truncate)
 
 type FHandle = HandleOS Fd
+
+{- ORMOLU_DISABLE -}
 
 -- | Some sensible defaults for the 'OpenFileFlags'.
 --
@@ -52,18 +58,18 @@ defaultFileFlags = Posix.OpenFileFlags {
     , Posix.noctty    = False
     , Posix.nonBlock  = False
     , Posix.trunc     = False
-# if MIN_VERSION_unix(2,8,0)
+#if MIN_VERSION_unix(2,8,0)
     , Posix.nofollow  = False
     , Posix.creat     = Nothing
     , Posix.cloexec   = False
     , Posix.directory = False
     , Posix.sync      = False
-# endif
+#endif
     }
 
 -- | Opens a file from disk.
 open :: FilePath -> OpenMode -> IO Fd
-# if MIN_VERSION_unix(2,8,0)
+#if MIN_VERSION_unix(2,8,0)
 open fp openMode = Posix.openFd fp posixOpenMode fileFlags
   where
     (posixOpenMode, fileFlags) = case openMode of
@@ -83,7 +89,7 @@ open fp openMode = Posix.openFd fp posixOpenMode fileFlags
                           , defaultFileFlags { Posix.exclusive = isExcl ex
                                              , Posix.creat = creat ex }
                           )
-# else
+#else
 open fp openMode = Posix.openFd fp posixOpenMode fileMode fileFlags
   where
     (posixOpenMode, fileMode, fileFlags) = case openMode of
@@ -104,7 +110,7 @@ open fp openMode = Posix.openFd fp posixOpenMode fileMode fileFlags
                           , creat ex
                           , defaultFileFlags { Posix.exclusive = isExcl ex }
                           )
-# endif
+#endif
     isExcl AllowExisting = False
     isExcl MustBeNew     = True
     isExcl MustExist     = False
@@ -113,10 +119,12 @@ open fp openMode = Posix.openFd fp posixOpenMode fileMode fileFlags
     creat MustBeNew     = Just Posix.stdFileMode
     creat MustExist     = Nothing
 
+{- ORMOLU_ENABLE -}
+
 -- | Writes the data pointed by the input 'Ptr Word8' into the input 'FHandle'.
 write :: FHandle -> Ptr Word8 -> Int64 -> IO Word32
 write h data' bytes = withOpenHandle "write" h $ \fd ->
-    fromIntegral <$> Posix.fdWriteBuf fd data' (fromIntegral bytes)
+  fromIntegral <$> Posix.fdWriteBuf fd data' (fromIntegral bytes)
 
 -- | Seek within the file.
 --
@@ -126,13 +134,13 @@ write h data' bytes = withOpenHandle "write" h $ \fd ->
 -- (e.g., the file pointer may not actually be moved until a subsequent write)
 seek :: FHandle -> SeekMode -> Int64 -> IO ()
 seek h seekMode offset = withOpenHandle "seek" h $ \fd ->
-    void $ Posix.fdSeek fd seekMode (fromIntegral offset)
+  void $ Posix.fdSeek fd seekMode (fromIntegral offset)
 
 -- | Reads a given number of bytes from the input 'FHandle'.
 read :: FHandle -> Word64 -> IO ByteString
 read h bytes = withOpenHandle "read" h $ \fd ->
-    Internal.createUptoN (fromIntegral bytes) $ \ptr ->
-      fromIntegral <$> Posix.fdReadBuf fd ptr (fromIntegral bytes)
+  Internal.createUptoN (fromIntegral bytes) $ \ptr ->
+    fromIntegral <$> Posix.fdReadBuf fd ptr (fromIntegral bytes)
 
 readBuf :: FHandle -> Ptr Word8 -> ByteCount -> IO ByteCount
 readBuf f buf c = withOpenHandle "readBuf" f $ \fd -> Posix.fdReadBuf fd buf c
@@ -142,8 +150,8 @@ writeBuf f buf c = withOpenHandle "writeBuf" f $ \fd -> Posix.fdWriteBuf fd buf 
 
 pread :: FHandle -> Word64 -> Word64 -> IO ByteString
 pread h bytes offset = withOpenHandle "pread" h $ \fd ->
-    Internal.createUptoN (fromIntegral bytes) $ \ptr ->
-      fromIntegral <$> Posix.fdPreadBuf fd ptr (fromIntegral bytes) (fromIntegral offset)
+  Internal.createUptoN (fromIntegral bytes) $ \ptr ->
+    fromIntegral <$> Posix.fdPreadBuf fd ptr (fromIntegral bytes) (fromIntegral offset)
 
 -- | @'preadBuf' fh buf c off@ reads @c@ bytes into the buffer @buf@ from the file
 -- handle @fh@ at the file offset @off@. This does not move the position of the
@@ -160,7 +168,7 @@ pwriteBuf h buf c off = withOpenHandle "pwriteBuf" h $ \fd -> Posix.fdPwriteBuf 
 -- | Truncates the file managed by the input 'FHandle' to the input size.
 truncate :: FHandle -> Word64 -> IO ()
 truncate h sz = withOpenHandle "truncate" h $ \fd ->
-    Posix.setFdSize fd (fromIntegral sz)
+  Posix.setFdSize fd (fromIntegral sz)
 
 -- | Close handle
 --
@@ -174,4 +182,4 @@ close h = closeHandleOS h Posix.closeFd
 -- may affect this thread).
 getSize :: FHandle -> IO Word64
 getSize h = withOpenHandle "getSize" h $ \fd ->
-     fromIntegral . Posix.fileSize <$> Posix.getFdStatus fd
+  fromIntegral . Posix.fileSize <$> Posix.getFdStatus fd

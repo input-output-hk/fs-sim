@@ -2,18 +2,18 @@
 
 -- | This module is mainly meant to be used for the 'IO' implementation of
 -- 'System.FS.API.HasFS'.
-module System.FS.IO.Handle (
-    HandleOS (..)
+module System.FS.IO.Handle
+  ( HandleOS (..)
   , closeHandleOS
   , isHandleClosedException
   , isOpenHandleOS
   , withOpenHandle
   ) where
 
-import           Control.Concurrent.MVar
-import           Control.Exception hiding (handle)
-import           Data.Maybe (isJust)
-import           System.IO.Error as IO
+import Control.Concurrent.MVar
+import Control.Exception hiding (handle)
+import Data.Maybe (isJust)
+import System.IO.Error as IO
 
 -- | File handlers for the IO instance for HasFS.
 -- This is parametric on the os.
@@ -21,10 +21,10 @@ import           System.IO.Error as IO
 -- The 'FilePath' is used to improve error messages.
 -- The 'MVar' is used to implement 'close'.
 -- osHandle is Fd for unix and HANDLE for Windows.
-data HandleOS osHandle = HandleOS {
-      filePath :: FilePath
-    , handle   :: MVar (Maybe osHandle)
-    }
+data HandleOS osHandle = HandleOS
+  { filePath :: FilePath
+  , handle :: MVar (Maybe osHandle)
+  }
 
 instance Eq (HandleOS a) where
   h1 == h2 = handle h1 == handle h2
@@ -40,7 +40,7 @@ closeHandleOS :: HandleOS osHandle -> (osHandle -> IO ()) -> IO ()
 closeHandleOS (HandleOS _ hVar) close =
   modifyMVar hVar $ \case
     Nothing -> return (Nothing, ())
-    Just h  -> close h >> return (Nothing, ())
+    Just h -> close h >> return (Nothing, ())
 
 {-------------------------------------------------------------------------------
   Exceptions
@@ -51,15 +51,15 @@ closeHandleOS (HandleOS _ hVar) close =
 -- handle is closed.
 withOpenHandle :: String -> HandleOS osHandle -> (osHandle -> IO a) -> IO a
 withOpenHandle label (HandleOS fp hVar) k =
-    withMVar hVar $ \case
-        Nothing -> throwIO (handleClosedException fp label)
-        Just fd -> k fd
+  withMVar hVar $ \case
+    Nothing -> throwIO (handleClosedException fp label)
+    Just fd -> k fd
 
 handleClosedException :: FilePath -> String -> IOException
 handleClosedException fp label =
-      flip IO.ioeSetErrorType IO.illegalOperationErrorType
-    $ flip IO.ioeSetFileName fp
-    $ userError (label ++ ": FHandle closed")
+  flip IO.ioeSetErrorType IO.illegalOperationErrorType $
+    flip IO.ioeSetFileName fp $
+      userError (label ++ ": FHandle closed")
 
 {-------------------------------------------------------------------------------
   Internal auxiliary
@@ -67,4 +67,4 @@ handleClosedException fp label =
 
 isHandleClosedException :: IOException -> Bool
 isHandleClosedException ioErr =
-    IO.isUserErrorType (IO.ioeGetErrorType ioErr)
+  IO.isUserErrorType (IO.ioeGetErrorType ioErr)

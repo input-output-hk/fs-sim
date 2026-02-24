@@ -3,15 +3,17 @@
 -- | CallStack with a nicer 'Show' instance
 --
 -- Use of this module is intended to /replace/ import of @GHC.Stack@
-module System.FS.CallStack (
-    prettyCallStack
+module System.FS.CallStack
+  ( prettyCallStack
+
     -- * opaque
   , PrettyCallStack
+
     -- * Re-exports
   , HasCallStack
   ) where
 
-import           GHC.Stack (CallStack, HasCallStack)
+import GHC.Stack (CallStack, HasCallStack)
 import qualified GHC.Stack as GHC
 
 {-------------------------------------------------------------------------------
