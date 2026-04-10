@@ -1,6 +1,6 @@
 cabal-version: 3.0
 name: fs-sim
-version: 0.4.1.0
+version: 0.4.1.1
 synopsis: Simulated file systems
 description: Simulated file systems.
 license: Apache-2.0
@@ -19,7 +19,7 @@ extra-doc-files:
   CHANGELOG.md
   README.md
 
-tested-with: ghc ==9.2 || ==9.4 || ==9.6 || ==9.8 || ==9.10 || ==9.12
+tested-with: ghc ==9.2 || ==9.4 || ==9.6 || ==9.8 || ==9.10 || ==9.12 || ==9.14
 
 source-repository head
   type: git
@@ -30,7 +30,7 @@ source-repository this
   type: git
   location: https://github.com/input-output-hk/fs-sim
   subdir: fs-sim
-  tag: fs-sim-0.4.1.0
+  tag: fs-sim-0.4.1.1
 
 library
   hs-source-dirs: src

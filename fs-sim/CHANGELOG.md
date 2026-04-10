@@ -1,5 +1,11 @@
 # Revision history for fs-sim
 
+## 0.4.1.1 -- 2026-04-10
+
+### Patch
+
+* Make `sim` operations exception safe by using `withMockFS`.
+
 ## 0.4.1.0 -- 2025-09-29
 
 ### Non-breaking
