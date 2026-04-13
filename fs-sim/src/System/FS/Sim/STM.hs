@@ -44,11 +44,9 @@ simHasFS' mockFS = simHasFS <$> newTMVarIO mockFS
 
 -- | Bracket-style helper that holds the MockFS lock for the duration of @f@.
 --
--- Acquire and release are wrapped in 'uninterruptibleMask' so that a
--- temporarily-empty TMVar (held by a concurrent 'sim' call) cannot cause a
--- masked cleanup to be interrupted while it waits for the lock. The body @f@
--- runs with the caller's original masking state restored, matching the
--- behaviour of 'Control.Concurrent.MVar.withMVar'.
+-- 'withMockFS' is not interruptible while waiting for the `MockFS` TMVar, but
+-- the body @f@ runs with the caller's original masking state restored, matching
+-- the behaviour of 'Control.Concurrent.MVar.withMVar'.
 withMockFS ::
   (MonadSTM m, MonadMask m) =>
   StrictTMVar m MockFS ->
