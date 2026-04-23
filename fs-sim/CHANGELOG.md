@@ -1,10 +1,11 @@
 # Revision history for fs-sim
 
-## 0.4.1.1 -- 2026-04-10
+## 0.5.0.0 -- 2026-04-23
 
-### Patch
+### Breaking
 
 * Make `sim` operations exception safe by using `withMockFS`.
+* Require `MonadMask` in `simHasFS`, `simHasFS'`, `runSimFS`.
 
 ## 0.4.1.0 -- 2025-09-29
 
