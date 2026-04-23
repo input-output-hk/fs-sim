@@ -559,7 +559,7 @@ instance Arbitrary Errors where
 
 -- | Alternative to 'simErrorHasFS' that creates 'TVar's internally.
 simErrorHasFS' ::
-  (MonadSTM m, MonadThrow m, PrimMonad m) =>
+  (MonadSTM m, MonadMask m, PrimMonad m) =>
   MockFS ->
   Errors ->
   m (HasFS m HandleMock)
@@ -569,7 +569,7 @@ simErrorHasFS' mockFS errs =
 -- | Introduce possibility of errors
 simErrorHasFS ::
   forall m.
-  (MonadSTM m, MonadThrow m, PrimMonad m) =>
+  (MonadSTM m, MonadMask m, PrimMonad m) =>
   StrictTMVar m MockFS ->
   StrictTVar m Errors ->
   HasFS m HandleMock
@@ -706,7 +706,7 @@ simErrorHasFS fsVar errorsVar =
 -- | Runs a computation provided an 'Errors' and an initial
 -- 'MockFS', producing a result and the final state of the filesystem.
 runSimErrorFS ::
-  (MonadSTM m, MonadThrow m, PrimMonad m) =>
+  (MonadSTM m, MonadMask m, PrimMonad m) =>
   MockFS ->
   Errors ->
   (StrictTVar m Errors -> HasFS m HandleMock -> m a) ->

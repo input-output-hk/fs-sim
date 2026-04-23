@@ -25,7 +25,7 @@ import System.FS.Sim.Prim
 --- result, the final state of the filesystem and a sequence of actions occurred
 --- in the filesystem.
 runSimFS ::
-  (MonadSTM m, MonadThrow m, PrimMonad m) =>
+  (MonadSTM m, MonadMask m, PrimMonad m) =>
   MockFS ->
   (HasFS m HandleMock -> m a) ->
   m (a, MockFS)
@@ -37,15 +37,33 @@ runSimFS fs act = do
 
 -- | Alternative to 'simHasFS' that creates 'TVar's internally.
 simHasFS' ::
-  (MonadSTM m, MonadThrow m, PrimMonad m) =>
+  (MonadSTM m, MonadMask m, PrimMonad m) =>
   MockFS ->
   m (HasFS m HandleMock)
 simHasFS' mockFS = simHasFS <$> newTMVarIO mockFS
 
+-- | Bracket-style helper that holds the MockFS lock for the duration of @f@.
+--
+-- 'withMockFS' is not interruptible while waiting for the `MockFS` TMVar, but
+-- the body @f@ runs with the caller's original masking state restored, matching
+-- the behaviour of 'Control.Concurrent.MVar.withMVar'.
+withMockFS ::
+  (MonadSTM m, MonadMask m) =>
+  StrictTMVar m MockFS ->
+  (MockFS -> m (MockFS, Either FsError a)) ->
+  m a
+withMockFS var f = do
+  result <- uninterruptibleMask $ \restore -> do
+    st <- atomically $ takeTMVar var
+    (st', ea) <- restore (f st) `onException` atomically (putTMVar var st)
+    atomically $ putTMVar var st'
+    pure ea
+  either throwIO pure result
+
 -- | Equip @m@ with a @HasFs@ instance using the mock file system
 simHasFS ::
   forall m.
-  (MonadSTM m, MonadThrow m, PrimMonad m) =>
+  (MonadSTM m, MonadMask m, PrimMonad m) =>
   StrictTMVar m MockFS ->
   HasFS m HandleMock
 simHasFS var =
@@ -78,15 +96,10 @@ simHasFS var =
     }
  where
   sim :: FSSimT m a -> m a
-  sim m = do
-    st <- atomically $ takeTMVar var
+  sim m = withMockFS var $ \st ->
     runFSSimT m st >>= \case
-      Left e -> do
-        atomically $ putTMVar var st
-        throwIO e
-      Right (a, st') -> do
-        atomically $ putTMVar var st'
-        pure a
+      Left e -> pure (st, Left e)
+      Right (a, st') -> pure (st', Right a)
 
   (.:) :: (y -> z) -> (x0 -> x1 -> y) -> (x0 -> x1 -> z)
   (f .: g) x0 x1 = f (g x0 x1)
