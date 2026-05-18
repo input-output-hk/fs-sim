@@ -1,5 +1,11 @@
 # Revision history for fs-sim
 
+## 0.5.0.1 -- 2026-05-18
+
+### Patch
+
+* Allow `QuickCheck 2.18.0.0`.
+
 ## 0.5.0.0 -- 2026-04-23
 
 ### Breaking
