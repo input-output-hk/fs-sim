@@ -1754,7 +1754,7 @@ showLabelledExamples = showLabelledExamples' Nothing 1000 (const True)
 
 prop_sequential :: Property
 prop_sequential =
-  withMaxSuccess 1000 $
+  withNumTests 1000 $
     QSM.forAllCommands (sm unusedHasFS) Nothing $
       runCmds
 
